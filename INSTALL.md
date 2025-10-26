@@ -14,6 +14,9 @@ Complete installation instructions for building and running MCP Manager on Linux
   - [Windows](#windows)
   - [macOS](#macos)
 - [Quick Start](#quick-start)
+- [MCP Server Installation](#mcp-server-installation)
+  - [Available MCP Servers](#available-mcp-servers)
+  - [Adding a New MCP Server](#adding-a-new-mcp-server)
 - [Configuration](#configuration)
 - [Troubleshooting](#troubleshooting)
 
@@ -392,6 +395,316 @@ git clone https://github.com/goeiespullen/chatnsbot-standalone.git
 cd chatnsbot-standalone
 ./run.sh
 ```
+
+---
+
+## MCP Server Installation
+
+MCP Manager is a gateway that connects to MCP (Model Context Protocol) servers. You need to install at least one MCP server to use the gateway.
+
+### Available MCP Servers
+
+#### Official MCP Servers
+
+**Azure DevOps MCP Server**
+- **Repository:** https://github.com/microsoft/azure-devops-mcp
+- **Language:** TypeScript/Node.js
+- **Features:** Work items, sprints, repositories, pull requests
+- **Installation:**
+
+```bash
+# Clone the repository
+git clone https://github.com/microsoft/azure-devops-mcp.git
+cd azure-devops-mcp
+
+# Install dependencies
+npm install
+
+# Build
+npm run build
+
+# Test (optional)
+npm test
+```
+
+**Configuration in MCP Manager:**
+```json
+{
+  "name": "Azure DevOps",
+  "type": "nodejs",
+  "command": "node",
+  "arguments": ["dist/index.js"],
+  "port": 8765,
+  "workingDir": "/path/to/azure-devops-mcp",
+  "env": {
+    "AZDO_ORG": "your-organization",
+    "AZDO_PROJECT": "your-project"
+  }
+}
+```
+
+**Environment variables needed:**
+- `AZDO_PAT` - Azure DevOps Personal Access Token
+
+---
+
+**Confluence MCP Server (Atlassian)**
+- **Repository:** https://github.com/sooperset/mcp-atlassian
+- **Language:** Python
+- **Features:** Pages, spaces, search, content management
+- **Installation:**
+
+```bash
+# Clone the repository
+git clone https://github.com/sooperset/mcp-atlassian.git
+cd mcp-atlassian
+
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate  # Linux/macOS
+# Or: venv\Scripts\activate  # Windows
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+**Configuration in MCP Manager:**
+```json
+{
+  "name": "Confluence",
+  "type": "python",
+  "command": "/path/to/mcp-atlassian/venv/bin/python",
+  "arguments": ["-m", "mcp_atlassian"],
+  "port": 8766,
+  "workingDir": "/path/to/mcp-atlassian",
+  "env": {
+    "CONFLUENCE_URL": "https://your-instance.atlassian.net/wiki"
+  }
+}
+```
+
+**Environment variables needed:**
+- `CONFLUENCE_API_TOKEN` - Atlassian API token
+- `CONFLUENCE_USERNAME` - Your Atlassian email
+
+---
+
+### Community MCP Servers
+
+Browse more MCP servers at:
+- **Awesome MCP Servers:** https://github.com/punkpeye/awesome-mcp-servers
+- **Official MCP Docs:** https://modelcontextprotocol.io/
+
+Popular community servers:
+- **GitHub MCP:** https://github.com/modelcontextprotocol/servers/tree/main/src/github
+- **Google Drive MCP:** https://github.com/modelcontextprotocol/servers/tree/main/src/gdrive
+- **Slack MCP:** https://github.com/modelcontextprotocol/servers/tree/main/src/slack
+- **PostgreSQL MCP:** https://github.com/modelcontextprotocol/servers/tree/main/src/postgres
+
+---
+
+### Adding a New MCP Server
+
+When you want to add a new MCP server to MCP Manager, follow these steps:
+
+#### Step 1: Install the MCP Server
+
+**For Python servers:**
+```bash
+# Clone from GitHub
+git clone <github-url>
+cd <server-directory>
+
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+**For Node.js servers:**
+```bash
+# Clone from GitHub
+git clone <github-url>
+cd <server-directory>
+
+# Install dependencies
+npm install
+
+# Build (if TypeScript)
+npm run build
+```
+
+#### Step 2: Test the Server
+
+Before adding to MCP Manager, test the server manually:
+
+**Python:**
+```bash
+python -m server_module
+# Or:
+python server.py
+```
+
+**Node.js:**
+```bash
+node dist/index.js
+# Or:
+npm start
+```
+
+#### Step 3: Add to MCP Manager
+
+1. Open MCP Manager GUI
+2. Click "Add Server" (or edit `configs/servers.json`)
+3. Fill in the details:
+
+```json
+{
+  "name": "My MCP Server",
+  "type": "python",  // or "nodejs"
+  "command": "/path/to/python",  // or "node"
+  "arguments": ["server.py"],    // or ["dist/index.js"]
+  "port": 8767,                  // unique port number
+  "workingDir": "/path/to/server",
+  "env": {
+    "API_KEY": "your_key",
+    "SERVER_URL": "https://api.example.com"
+  },
+  "autostart": false,
+  "healthCheckInterval": 30000
+}
+```
+
+**Required fields:**
+- `name` - Display name in MCP Manager
+- `type` - `"python"` or `"nodejs"`
+- `command` - Full path to python/node executable
+- `arguments` - Arguments to pass (file to run)
+- `port` - Unique port number (8765+)
+- `workingDir` - Server's root directory
+
+**Optional fields:**
+- `env` - Environment variables (non-sensitive only!)
+- `autostart` - Auto-start on MCP Manager launch
+- `healthCheckInterval` - Health check frequency (ms)
+
+#### Step 4: Configure Credentials
+
+**IMPORTANT:** Never put credentials in `servers.json`!
+
+Set credentials via environment variables:
+
+**Linux/macOS:**
+```bash
+export API_TOKEN="your_secret_token"
+export API_KEY="your_api_key"
+```
+
+**Windows:**
+```cmd
+set API_TOKEN=your_secret_token
+set API_KEY=your_api_key
+```
+
+Or create a `.env` file (add to `.gitignore`):
+```bash
+API_TOKEN=your_secret_token
+API_KEY=your_api_key
+```
+
+#### Step 5: Start the Server
+
+1. In MCP Manager GUI, find your server
+2. Click "Start"
+3. Check logs for any errors
+4. Verify status shows "Running"
+5. Test via ChatNSbot or client
+
+---
+
+### Example: Complete Setup Flow
+
+**Scenario:** Adding GitHub MCP server
+
+```bash
+# 1. Install the server
+git clone https://github.com/modelcontextprotocol/servers.git
+cd servers/src/github
+npm install
+npm run build
+
+# 2. Set credentials
+export GITHUB_TOKEN="ghp_your_token_here"
+
+# 3. Add to MCP Manager config
+# Edit configs/servers.json:
+{
+  "name": "GitHub",
+  "type": "nodejs",
+  "command": "node",
+  "arguments": ["build/index.js"],
+  "port": 8768,
+  "workingDir": "/path/to/servers/src/github",
+  "env": {
+    "GITHUB_OWNER": "your-username"
+  }
+}
+
+# 4. Start MCP Manager
+./run.sh
+
+# 5. Start GitHub server in GUI
+# Click "Start" button next to "GitHub"
+
+# 6. Test with ChatNSbot
+cd /path/to/chatnsbot-standalone
+./run.sh
+# Ask: "List my GitHub repositories"
+```
+
+---
+
+### MCP Server Development
+
+Want to create your own MCP server?
+
+**Resources:**
+- **MCP Specification:** https://modelcontextprotocol.io/specification
+- **Python SDK:** https://github.com/modelcontextprotocol/python-sdk
+- **TypeScript SDK:** https://github.com/modelcontextprotocol/typescript-sdk
+- **Example Servers:** https://github.com/modelcontextprotocol/servers
+
+**Minimum server requirements:**
+- Implement MCP protocol (JSON-RPC 2.0)
+- Support `initialize` method
+- Support `tools/list` method
+- Support `tools/call` method
+- Handle stdin/stdout communication
+
+**Template structure:**
+```python
+# Python MCP Server Template
+from mcp import Server
+
+server = Server("my-server")
+
+@server.list_tools()
+async def list_tools():
+    return [{"name": "my_tool", "description": "...", "inputSchema": {...}}]
+
+@server.call_tool()
+async def call_tool(name, arguments):
+    if name == "my_tool":
+        return {"result": "..."}
+
+if __name__ == "__main__":
+    server.run()
+```
+
+---
+
 
 ---
 

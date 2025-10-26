@@ -572,14 +572,35 @@ For questions or issues, contact the NS AI/Data development team.
 
 ## Related Projects
 
+### Clients
+
 - **ChatNSbot** - Terminal chatbot powered by ChatNS LLM
   - Connects to MCP Manager Gateway for interactive AI conversations
   - Zero dependencies (Python stdlib only)
   - Cross-platform: Linux, Windows, macOS
   - Repository: https://github.com/goeiespullen/chatnsbot-standalone
 
+### MCP Servers
+
+- **Azure DevOps MCP** - Official Microsoft MCP server
+  - Work items, sprints, repositories, pull requests
+  - Repository: https://github.com/microsoft/azure-devops-mcp
+
+- **Atlassian MCP** - Confluence and Jira integration
+  - Pages, spaces, search, content management
+  - Repository: https://github.com/sooperset/mcp-atlassian
+
+- **More MCP Servers** - Community servers collection
+  - GitHub, Google Drive, Slack, PostgreSQL, and more
+  - Repository: https://github.com/modelcontextprotocol/servers
+
+### Resources
+
 - **Model Context Protocol** - Official MCP specification
   - https://modelcontextprotocol.io/
+
+- **Awesome MCP Servers** - Curated list of MCP servers
+  - https://github.com/punkpeye/awesome-mcp-servers
 
 ---
 
