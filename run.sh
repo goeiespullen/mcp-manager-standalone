@@ -1,14 +1,7 @@
 #!/bin/bash
-# Azure DevOps MCP Server Launcher
+# MCP Manager - Build and Run Script
 
 cd "$(dirname "$0")"
-
-# Check if built
-if [ ! -f "build/azuredevops-mcp-server" ]; then
-    echo "❌ Application not built yet!"
-    echo "Run: cd build && cmake .. && make"
-    exit 1
-fi
 
 # Check for DISPLAY (X11)
 if [ -z "$DISPLAY" ]; then
@@ -16,18 +9,26 @@ if [ -z "$DISPLAY" ]; then
     echo "Make sure you're running in a graphical environment"
 fi
 
-# Export environment variables if available
-if [ -n "$AZDO_PAT" ]; then
-    echo "✅ Using AZDO_PAT from environment"
+# Create build directory if it doesn't exist
+if [ ! -d "build" ]; then
+    echo "📁 Creating build directory..."
+    mkdir build
 fi
 
-if [ -n "$AZDO_ORG" ]; then
-    echo "✅ Using AZDO_ORG from environment"
+# Build if necessary
+if [ ! -f "build/mcp-manager" ]; then
+    echo "🔨 Building MCP Manager..."
+    cd build
+    cmake .. || { echo "❌ CMake failed"; exit 1; }
+    make -j$(nproc) || { echo "❌ Build failed"; exit 1; }
+    cd ..
+    echo "✅ Build complete"
 fi
 
 echo ""
-echo "🚀 Starting Azure DevOps MCP Server..."
+echo "🚀 Starting MCP Manager..."
+echo "   Gateway will listen on port 8700"
 echo ""
 
 # Run the application
-./build/azuredevops-mcp-server "$@"
+./build/mcp-manager "$@"

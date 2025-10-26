@@ -1,5 +1,8 @@
 # MCP Manager Gateway
 
+**Cross-Platform Support:** Linux, Windows, macOS
+
+
 **Enterprise-grade, multi-tenant MCP server management and session-based gateway**
 
 Multi-server manager for Model Context Protocol (MCP) servers with built-in session-based gateway for multi-tenant access. Manage multiple MCP integrations (Azure DevOps, Confluence, etc.) from a single Qt-based application.
@@ -65,13 +68,25 @@ MCP Manager provides two modes of operation:
 
 ## Quick Start
 
+**📖 For detailed installation instructions, see [INSTALL.md](INSTALL.md)**
+
 ### 1. Build
 
+**Linux/macOS:**
 ```bash
-cd mcp-manager
+./build.sh
+# Or manually:
 mkdir -p build && cd build
-cmake ..
-make -j4
+cmake .. && make -j$(nproc)
+```
+
+**Windows:**
+```cmd
+build.bat
+REM Or manually:
+mkdir build && cd build
+cmake .. -G "Visual Studio 17 2022"
+cmake --build . --config Release
 ```
 
 ### 2. Configure
@@ -99,8 +114,21 @@ Edit `configs/servers.json`:
 
 **Important:** Do NOT put credentials in this file! They're provided per-session.
 
-### 3. Start
+### 3. Run
 
+**Linux/macOS:**
+```bash
+./run.sh
+```
+
+**Windows:**
+```cmd
+run.bat
+# Or:
+build\Release\mcp-manager.exe
+```
+
+**Manual start:**
 ```bash
 # GUI mode (recommended)
 ./build/mcp-manager
@@ -539,3 +567,45 @@ Internal NS Development - ChatNS Summer School Initiative
 ## Contact
 
 For questions or issues, contact the NS AI/Data development team.
+
+---
+
+## Related Projects
+
+- **ChatNSbot** - Terminal chatbot powered by ChatNS LLM
+  - Connects to MCP Manager Gateway for interactive AI conversations
+  - Zero dependencies (Python stdlib only)
+  - Cross-platform: Linux, Windows, macOS
+  - Repository: https://github.com/goeiespullen/chatnsbot-standalone
+
+- **Model Context Protocol** - Official MCP specification
+  - https://modelcontextprotocol.io/
+
+---
+
+## Installation
+
+**📖 For complete installation instructions, see [INSTALL.md](INSTALL.md)**
+
+Quick start:
+
+**Linux/macOS:**
+```bash
+./build.sh
+./run.sh
+```
+
+**Windows:**
+```cmd
+build.bat
+run.bat
+```
+
+---
+
+## Support
+
+- **Issues:** https://github.com/goeiespullen/mcp-manager-standalone/issues
+- **Installation Guide:** [INSTALL.md](INSTALL.md)
+- **ChatNSbot:** https://github.com/goeiespullen/chatnsbot-standalone
+
