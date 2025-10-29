@@ -3,6 +3,10 @@
 #include "MCPServerInstance.h"
 #include "MCPGateway.h"
 #include "TrafficMonitor.h"
+#include "UpdateChecker.h"
+#include "UpdateDialog.h"
+#include "Version.h"
+#include "Logger.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFormLayout>
@@ -35,6 +39,11 @@
 #include <QRegularExpression>
 #include <QListWidget>
 #include <QApplication>
+#include <QThread>
+#include <QDateTime>
+#include <QNetworkAccessManager>
+#include <QNetworkRequest>
+#include <QNetworkReply>
 
 MainWindow::MainWindow(MCPServerManager* manager, QWidget* parent)
     : QMainWindow(parent)
@@ -46,6 +55,15 @@ MainWindow::MainWindow(MCPServerManager* manager, QWidget* parent)
 
     // Create Traffic monitor
     m_trafficMonitor = new TrafficMonitor(this);
+
+    // Create Update Checker
+    m_updateChecker = new UpdateChecker(this);
+    connect(m_updateChecker, &UpdateChecker::updateAvailable,
+            this, &MainWindow::onUpdateAvailable);
+    connect(m_updateChecker, &UpdateChecker::noUpdateAvailable,
+            this, &MainWindow::onNoUpdateAvailable);
+    connect(m_updateChecker, &UpdateChecker::checkFailed,
+            this, &MainWindow::onUpdateCheckFailed);
 
     // Create and start Gateway
     m_gateway = new MCPGateway(manager, this);
@@ -103,6 +121,7 @@ void MainWindow::setupUI() {
     m_tabWidget = new QTabWidget();
     m_tabWidget->addTab(createServersTab(), "Servers");
     m_tabWidget->addTab(createToolsBrowserTab(), "Tools Browser");
+    m_tabWidget->addTab(createApiTesterTab(), "API Tester");
     m_tabWidget->addTab(createGatewayTab(), "Gateway (Port 8700)");
     m_tabWidget->addTab(createLogsTab(), "Logs");
     m_tabWidget->addTab(m_trafficMonitor, "Traffic Monitor");
@@ -515,6 +534,188 @@ QWidget* MainWindow::createToolsBrowserTab() {
     return widget;
 }
 
+QWidget* MainWindow::createApiTesterTab() {
+    QWidget* widget = new QWidget();
+    QVBoxLayout* layout = new QVBoxLayout(widget);
+
+    // API Type selector
+    QHBoxLayout* typeLayout = new QHBoxLayout();
+    typeLayout->addWidget(new QLabel("<b>API Type:</b>"));
+    m_apiTypeCombo = new QComboBox();
+    m_apiTypeCombo->addItem("Azure DevOps", "azure");
+    m_apiTypeCombo->addItem("TeamCentraal", "teamcentraal");
+    m_apiTypeCombo->setMaximumWidth(200);
+    typeLayout->addWidget(m_apiTypeCombo);
+    typeLayout->addStretch();
+    layout->addLayout(typeLayout);
+
+    // Info label (dynamic based on API type)
+    m_apiInfoLabel = new QLabel(
+        "<b>Azure DevOps REST API Tester</b><br>"
+        "Test API endpoints directly for troubleshooting. All calls use Basic Auth with PAT token.");
+    m_apiInfoLabel->setWordWrap(true);
+    layout->addWidget(m_apiInfoLabel);
+
+    // Configuration section
+    QGroupBox* configGroup = new QGroupBox("Configuration");
+    QFormLayout* configLayout = new QFormLayout();
+
+    m_apiOrgInput = new QLineEdit("ns-topaas");
+    configLayout->addRow("Organization:", m_apiOrgInput);
+
+    m_apiProjectInput = new QLineEdit();
+    m_apiProjectInput->setPlaceholderText("Optional - leave empty for org-level APIs");
+    configLayout->addRow("Project:", m_apiProjectInput);
+
+    // Username (for TeamCentraal)
+    m_apiUsernameInput = new QLineEdit();
+    m_apiUsernameInput->setPlaceholderText("Enter username");
+    m_apiUsernameInput->setVisible(false);
+    configLayout->addRow("Username:", m_apiUsernameInput);
+
+    // Password (for TeamCentraal)
+    m_apiPasswordInput = new QLineEdit();
+    m_apiPasswordInput->setEchoMode(QLineEdit::Password);
+    m_apiPasswordInput->setPlaceholderText("Enter password");
+    m_apiPasswordInput->setVisible(false);
+    configLayout->addRow("Password:", m_apiPasswordInput);
+
+    // PAT Token (for Azure DevOps)
+    m_apiPatInput = new QLineEdit();
+    m_apiPatInput->setEchoMode(QLineEdit::Password);
+    m_apiPatInput->setPlaceholderText("Enter your Personal Access Token (PAT)");
+    configLayout->addRow("PAT Token:", m_apiPatInput);
+
+    configGroup->setLayout(configLayout);
+    layout->addWidget(configGroup);
+
+    // Request section
+    QGroupBox* requestGroup = new QGroupBox("Request");
+    QVBoxLayout* requestLayout = new QVBoxLayout();
+
+    // Template selector
+    QHBoxLayout* templateLayout = new QHBoxLayout();
+    templateLayout->addWidget(new QLabel("Quick Template:"));
+    m_apiTemplateCombo = new QComboBox();
+    // Azure DevOps templates
+    m_apiTemplateCombo->addItem("Custom", "");
+    m_apiTemplateCombo->addItem("[Azure] List Projects", "_apis/projects?api-version=7.1");
+    m_apiTemplateCombo->addItem("[Azure] List Teams (requires project)", "{project}/_apis/teams?api-version=7.1");
+    m_apiTemplateCombo->addItem("[Azure] Current Sprint (requires project + team)", "{project}/{team}/_apis/work/teamsettings/iterations?$timeframe=current&api-version=7.1");
+    m_apiTemplateCombo->addItem("[Azure] List Repositories (requires project)", "{project}/_apis/git/repositories?api-version=7.1");
+    m_apiTemplateCombo->addItem("[Azure] WIQL Query (requires project)", "{project}/_apis/wit/wiql?api-version=7.1");
+
+    // TeamCentraal templates
+    m_apiTemplateCombo->addItem("[TC] All Teams", "odata/POS_Odata_v4/Teams");
+    m_apiTemplateCombo->addItem("[TC] Teams with Department", "odata/POS_Odata_v4/Teams?$expand=Team_Department");
+    m_apiTemplateCombo->addItem("[TC] Development Teams", "odata/POS_Odata_v4/Teams?$filter=TeamCategory eq 'Development'");
+    m_apiTemplateCombo->addItem("[TC] Team Members", "odata/POS_Odata_v4/TeamMembers?$expand=Account,FunctieRols");
+    m_apiTemplateCombo->addItem("[TC] Departments", "odata/POS_Odata_v4/Departments");
+    m_apiTemplateCombo->addItem("[TC] DORA Metings", "odata/POS_Odata_v4/DoraMetings");
+
+    connect(m_apiTemplateCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [this](int index) {
+        QString endpoint = m_apiTemplateCombo->currentData().toString();
+        if (!endpoint.isEmpty()) {
+            m_apiEndpointInput->setText(endpoint);
+
+            // Set method based on endpoint
+            if (endpoint.contains("/wiql")) {
+                m_apiMethodCombo->setCurrentText("POST");
+                m_apiRequestBody->setPlainText("{\n  \"query\": \"SELECT [System.Id], [System.Title] FROM WorkItems WHERE [System.WorkItemType] = 'User Story'\"\n}");
+            } else {
+                m_apiMethodCombo->setCurrentText("GET");
+                m_apiRequestBody->clear();
+            }
+        }
+    });
+
+    templateLayout->addWidget(m_apiTemplateCombo);
+    templateLayout->addStretch();
+    requestLayout->addLayout(templateLayout);
+
+    // Connect API type selector to update UI
+    connect(m_apiTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [this](int index) {
+        QString apiType = m_apiTypeCombo->currentData().toString();
+        bool isTeamCentraal = (apiType == "teamcentraal");
+
+        // Show/hide appropriate authentication fields
+        m_apiUsernameInput->setVisible(isTeamCentraal);
+        m_apiPasswordInput->setVisible(isTeamCentraal);
+        m_apiUsernameInput->parentWidget()->layout()->itemAt(0)->widget()->setVisible(isTeamCentraal); // Username label
+        m_apiPasswordInput->parentWidget()->layout()->itemAt(0)->widget()->setVisible(isTeamCentraal); // Password label
+
+        m_apiPatInput->setVisible(!isTeamCentraal);
+        m_apiProjectInput->setVisible(!isTeamCentraal);
+
+        // Update info label
+        if (isTeamCentraal) {
+            m_apiInfoLabel->setText(
+                "<b>TeamCentraal OData REST API Tester</b><br>"
+                "Test TeamCentraal endpoints. Uses HTTP Basic Auth with username/password. "
+                "See <b>Help → TeamCentraal API Guide</b> for examples.");
+            m_apiOrgInput->setText("teamcentraal-a.ns.nl");
+            m_apiOrgInput->setPlaceholderText("e.g., teamcentraal-a.ns.nl or teamcentraal.ns.nl");
+        } else {
+            m_apiInfoLabel->setText(
+                "<b>Azure DevOps REST API Tester</b><br>"
+                "Test API endpoints directly for troubleshooting. All calls use Basic Auth with PAT token. "
+                "See <b>Help → Azure DevOps API Guide</b> for examples.");
+            m_apiOrgInput->setText("ns-topaas");
+            m_apiOrgInput->setPlaceholderText("e.g., ns-topaas");
+        }
+    });
+
+    // Method and endpoint
+    QHBoxLayout* methodLayout = new QHBoxLayout();
+    m_apiMethodCombo = new QComboBox();
+    m_apiMethodCombo->addItems({"GET", "POST", "PUT", "PATCH", "DELETE"});
+    m_apiMethodCombo->setMaximumWidth(100);
+    methodLayout->addWidget(new QLabel("Method:"));
+    methodLayout->addWidget(m_apiMethodCombo);
+
+    methodLayout->addWidget(new QLabel("Endpoint:"));
+    m_apiEndpointInput = new QLineEdit();
+    m_apiEndpointInput->setPlaceholderText("e.g., _apis/projects?api-version=7.1");
+    methodLayout->addWidget(m_apiEndpointInput);
+
+    requestLayout->addLayout(methodLayout);
+
+    // Request body
+    QLabel* bodyLabel = new QLabel("Request Body (for POST/PUT/PATCH):");
+    requestLayout->addWidget(bodyLabel);
+
+    m_apiRequestBody = new QTextEdit();
+    m_apiRequestBody->setPlaceholderText("{\n  \"key\": \"value\"\n}");
+    m_apiRequestBody->setMaximumHeight(150);
+    requestLayout->addWidget(m_apiRequestBody);
+
+    requestGroup->setLayout(requestLayout);
+    layout->addWidget(requestGroup);
+
+    // Execute button
+    m_apiExecuteButton = new QPushButton("Execute API Call");
+    m_apiExecuteButton->setIcon(QIcon::fromTheme("system-run"));
+    connect(m_apiExecuteButton, &QPushButton::clicked, this, &MainWindow::executeApiCall);
+    layout->addWidget(m_apiExecuteButton);
+
+    // Response section
+    QGroupBox* responseGroup = new QGroupBox("Response");
+    QVBoxLayout* responseLayout = new QVBoxLayout();
+
+    m_apiResponseDisplay = new QTextEdit();
+    m_apiResponseDisplay->setReadOnly(true);
+    m_apiResponseDisplay->setPlaceholderText("API response will appear here...");
+    responseLayout->addWidget(m_apiResponseDisplay);
+
+    responseGroup->setLayout(responseLayout);
+    layout->addWidget(responseGroup);
+
+    // Initialize network manager
+    m_apiNetworkManager = new QNetworkAccessManager(this);
+
+    return widget;
+}
+
 void MainWindow::createMenuBar() {
     QMenuBar* menuBar = new QMenuBar(this);
     setMenuBar(menuBar);
@@ -529,6 +730,11 @@ void MainWindow::createMenuBar() {
     QAction* saveAction = fileMenu->addAction("&Save Config");
     saveAction->setShortcut(QKeySequence::Save);
     connect(saveAction, &QAction::triggered, this, &MainWindow::onSaveConfigClicked);
+
+    fileMenu->addSeparator();
+
+    QAction* openLogsAction = fileMenu->addAction("📄 Open &Logs Folder...");
+    connect(openLogsAction, &QAction::triggered, this, &MainWindow::onOpenLogsFolder);
 
     fileMenu->addSeparator();
 
@@ -565,6 +771,12 @@ void MainWindow::createMenuBar() {
     QAction* userManualAction = docsMenu->addAction("📘 User Manual");
     connect(userManualAction, &QAction::triggered, this, &MainWindow::onShowUserManual);
 
+    QAction* azureApiGuideAction = docsMenu->addAction("🔌 Azure DevOps API Guide");
+    connect(azureApiGuideAction, &QAction::triggered, this, &MainWindow::onShowAzureDevOpsApiGuide);
+
+    QAction* teamCentraalApiGuideAction = docsMenu->addAction("👥 TeamCentraal API Guide");
+    connect(teamCentraalApiGuideAction, &QAction::triggered, this, &MainWindow::onShowTeamCentraalApiGuide);
+
     docsMenu->addSeparator();
 
     QAction* openDocsAction = docsMenu->addAction("📂 Open Documentation Folder...");
@@ -572,10 +784,15 @@ void MainWindow::createMenuBar() {
 
     helpMenu->addSeparator();
 
+    QAction* checkUpdatesAction = helpMenu->addAction("Check for &Updates...");
+    connect(checkUpdatesAction, &QAction::triggered, this, &MainWindow::onCheckForUpdates);
+
+    helpMenu->addSeparator();
+
     QAction* aboutAction = helpMenu->addAction("&About");
     connect(aboutAction, &QAction::triggered, [this]() {
         QMessageBox::about(this, "About MCP Server Manager",
-            "<h3>MCP Server Manager v2.0</h3>"
+            QString("<h3>MCP Server Manager v%1</h3>"
             "<p>Manage multiple Model Context Protocol servers from a single interface.</p>"
             "<p>Features:</p>"
             "<ul>"
@@ -584,7 +801,7 @@ void MainWindow::createMenuBar() {
             "<li>Traffic monitoring</li>"
             "<li>Centralized configuration</li>"
             "</ul>"
-            "<p>Built with Qt6 and C++</p>");
+            "<p>Built with Qt6 and C++</p>").arg(MCP_MANAGER_VERSION_STRING));
     });
 }
 
@@ -1319,7 +1536,19 @@ QString MainWindow::extractZipFile(const QString& zipPath, const QString& destDi
     QString tempDir = destDir + "_temp";
     process.start("unzip", QStringList() << "-q" << zipPath << "-d" << tempDir);
 
-    if (!process.waitForFinished(30000)) { // 30 second timeout
+    // Wait for process while keeping UI responsive
+    int elapsed = 0;
+    int timeoutMs = 30000;  // 30 second timeout
+    while (process.state() == QProcess::Running && elapsed < timeoutMs) {
+        if (process.waitForFinished(100)) {  // Check every 100ms
+            break;
+        }
+        QApplication::processEvents();  // Keep UI responsive
+        elapsed += 100;
+    }
+
+    if (process.state() == QProcess::Running) {
+        process.kill();
         QDir(tempDir).removeRecursively();
         return "Extraction timed out";
     }
@@ -1339,6 +1568,7 @@ QString MainWindow::extractZipFile(const QString& zipPath, const QString& destDi
         QString subDir = tempDir + "/" + entries.first();
         if (log) {
             log->append(QString("   Found subdirectory: %1").arg(entries.first()));
+            QApplication::processEvents();
         }
 
         // Rename the subdirectory to final destination
@@ -1400,6 +1630,19 @@ QString MainWindow::installDependencies(const QString& dirPath, const QString& s
     QProcess process;
     process.setWorkingDirectory(dirPath);
 
+    // Helper lambda to wait for process while keeping UI responsive
+    auto waitForProcessResponsive = [&](QProcess& proc, int timeoutMs) -> bool {
+        int elapsed = 0;
+        while (proc.state() == QProcess::Running && elapsed < timeoutMs) {
+            if (proc.waitForFinished(100)) {  // Check every 100ms
+                return true;
+            }
+            QApplication::processEvents();  // Keep UI responsive
+            elapsed += 100;
+        }
+        return proc.state() == QProcess::NotRunning;
+    };
+
     if (serverType == "python") {
         // Check if we should use uv or pip
         QFile pyprojectFile(dirPath + "/pyproject.toml");
@@ -1424,6 +1667,7 @@ QString MainWindow::installDependencies(const QString& dirPath, const QString& s
             // Use uv
             if (log) {
                 log->append("   Installing with uv...");
+                QApplication::processEvents();
             }
 
             // Check if uv is installed
@@ -1436,7 +1680,7 @@ QString MainWindow::installDependencies(const QString& dirPath, const QString& s
             }
 
             process.start("uv", QStringList() << "sync");
-            if (!process.waitForFinished(120000)) { // 2 minute timeout
+            if (!waitForProcessResponsive(process, 120000)) { // 2 minute timeout
                 return "uv sync timed out";
             }
 
@@ -1449,17 +1693,19 @@ QString MainWindow::installDependencies(const QString& dirPath, const QString& s
                 QString output = process.readAllStandardOutput();
                 if (!output.isEmpty()) {
                     log->append("   " + output.replace("\n", "\n   "));
+                    QApplication::processEvents();
                 }
             }
         } else {
             // Use pip with venv
             if (log) {
                 log->append("   Creating virtual environment...");
+                QApplication::processEvents();
             }
 
             // Create venv
             process.start("python3", QStringList() << "-m" << "venv" << ".venv");
-            if (!process.waitForFinished(60000)) {
+            if (!waitForProcessResponsive(process, 60000)) {
                 return "venv creation timed out";
             }
 
@@ -1474,10 +1720,11 @@ QString MainWindow::installDependencies(const QString& dirPath, const QString& s
             if (QFile::exists(dirPath + "/requirements.txt")) {
                 if (log) {
                     log->append("   Installing from requirements.txt...");
+                    QApplication::processEvents();
                 }
 
                 process.start(pipPath, QStringList() << "install" << "-r" << "requirements.txt");
-                if (!process.waitForFinished(180000)) { // 3 minute timeout
+                if (!waitForProcessResponsive(process, 180000)) { // 3 minute timeout
                     return "pip install timed out";
                 }
 
@@ -1488,10 +1735,11 @@ QString MainWindow::installDependencies(const QString& dirPath, const QString& s
             } else if (QFile::exists(dirPath + "/setup.py")) {
                 if (log) {
                     log->append("   Installing with pip install -e .");
+                    QApplication::processEvents();
                 }
 
                 process.start(pipPath, QStringList() << "install" << "-e" << ".");
-                if (!process.waitForFinished(180000)) {
+                if (!waitForProcessResponsive(process, 180000)) {
                     return "pip install timed out";
                 }
 
@@ -1504,10 +1752,11 @@ QString MainWindow::installDependencies(const QString& dirPath, const QString& s
     } else if (serverType == "node") {
         if (log) {
             log->append("   Running npm install...");
+            QApplication::processEvents();
         }
 
         process.start("npm", QStringList() << "install");
-        if (!process.waitForFinished(180000)) { // 3 minute timeout
+        if (!waitForProcessResponsive(process, 180000)) { // 3 minute timeout
             return "npm install timed out";
         }
 
@@ -1520,6 +1769,7 @@ QString MainWindow::installDependencies(const QString& dirPath, const QString& s
             QString output = process.readAllStandardOutput();
             if (!output.isEmpty()) {
                 log->append("   " + output.split("\n").last());
+                QApplication::processEvents();
             }
         }
     }
@@ -1627,6 +1877,7 @@ QString MainWindow::findEntryPoint(const QString& dirPath, const QString& server
 
 void MainWindow::onShowGatewayHelp() {
     QDialog* dialog = new QDialog(this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose); // Auto-delete when closed
     dialog->setWindowTitle("Gateway Python Client Example");
     dialog->resize(700, 550);
 
@@ -1699,10 +1950,10 @@ void MainWindow::onShowGatewayHelp() {
     layout->addWidget(noteLabel);
 
     QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Ok);
-    connect(buttons, &QDialogButtonBox::accepted, dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::accepted, dialog, &QDialog::close);
     layout->addWidget(buttons);
 
-    dialog->exec();
+    dialog->show(); // Show modeless - allows using main window
 }
 
 void MainWindow::onShowTestingDocs() {
@@ -1728,6 +1979,46 @@ void MainWindow::onShowUserManual() {
     showMarkdownDialog("User Manual - Complete Guide", docPath,
         "<b>Complete User Manual (60+ pages)</b><br><br>"
         "Comprehensive guide covering installation, testing, troubleshooting, and advanced usage.");
+}
+
+void MainWindow::onShowAzureDevOpsApiGuide() {
+    // Show the Azure DevOps API practical guide
+    QString docPath = QApplication::applicationDirPath() + "/../docs/AZURE_DEVOPS_API_PRACTICAL_GUIDE.md";
+    showMarkdownDialog("Azure DevOps REST API - Practical Guide", docPath,
+        "<b>Azure DevOps REST API - Practical Guide</b><br><br>"
+        "Comprehensive guide with concrete examples for using Azure DevOps REST API via the API Tester. "
+        "Includes work items, story points, sprint management, Git repositories, builds, and troubleshooting.");
+}
+
+void MainWindow::onShowTeamCentraalApiGuide() {
+    // Show the TeamCentraal OData API guide
+    QString docPath = QApplication::applicationDirPath() + "/../docs/TEAMCENTRAAL_API_GUIDE.md";
+    showMarkdownDialog("TeamCentraal OData REST API - Practical Guide", docPath,
+        "<b>TeamCentraal OData REST API - Practical Guide</b><br><br>"
+        "Complete guide for accessing NS team information via TeamCentraal OData V4 API. "
+        "Includes team queries, organization structure, DORA metrics, OData query options, and troubleshooting.");
+}
+
+void MainWindow::onOpenLogsFolder() {
+    // Open the logs folder in system file browser
+    QString logsPath = Logger::instance()->logDirectory();
+    QDir logsDir(logsPath);
+
+    if (!logsDir.exists()) {
+        QMessageBox::information(this, "Logs Folder",
+            QString("Logs folder not found:\n%1\n\nIt will be created when the application starts logging.").arg(logsPath));
+        return;
+    }
+
+    QString path = logsDir.absolutePath();
+
+    #ifdef Q_OS_WIN
+        QProcess::startDetached("explorer", QStringList() << QDir::toNativeSeparators(path));
+    #elif defined(Q_OS_MAC)
+        QProcess::startDetached("open", QStringList() << path);
+    #else
+        QProcess::startDetached("xdg-open", QStringList() << path);
+    #endif
 }
 
 void MainWindow::onOpenDocsFolder() {
@@ -1773,8 +2064,9 @@ void MainWindow::showMarkdownDialog(const QString& title, const QString& filePat
     QString content = in.readAll();
     file.close();
 
-    // Create dialog
+    // Create dialog (modeless - allows using main window while help is open)
     QDialog* dialog = new QDialog(this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose); // Auto-delete when closed
     dialog->setWindowTitle(title);
     dialog->resize(900, 700);
 
@@ -1818,12 +2110,12 @@ void MainWindow::showMarkdownDialog(const QString& title, const QString& filePat
     buttonLayout->addStretch();
 
     QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Close);
-    connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
+    connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::close);
     buttonLayout->addWidget(buttons);
 
     layout->addLayout(buttonLayout);
 
-    dialog->exec();
+    dialog->show(); // Show modeless - allows using main window
 }
 
 void MainWindow::updateGatewayStatus() {
@@ -1934,4 +2226,190 @@ void MainWindow::updateToolsServerList() {
             }
         }
     }
+}
+
+// Update Checker Slots
+
+void MainWindow::onCheckForUpdates() {
+    statusBar()->showMessage("Checking for updates...");
+    m_updateChecker->checkForUpdates();
+}
+
+void MainWindow::onUpdateAvailable(const UpdateChecker::ReleaseInfo& info) {
+    statusBar()->showMessage(QString("Update available: v%1").arg(info.version.string), 3000);
+
+    // Show update dialog
+    UpdateDialog dialog(info, m_updateChecker->getCurrentVersion(), this);
+    dialog.exec();
+}
+
+void MainWindow::onNoUpdateAvailable() {
+    statusBar()->showMessage("You have the latest version", 3000);
+
+    QMessageBox::information(this, "MCP Manager - No Update Available",
+        QString("You are already running the latest version (%1).")
+            .arg(MCP_MANAGER_VERSION_STRING));
+}
+
+void MainWindow::onUpdateCheckFailed(const QString& error) {
+    statusBar()->showMessage("Update check failed", 3000);
+
+    QMessageBox::warning(this, "MCP Manager - Update Check Failed",
+        QString("Failed to check for updates:\n\n%1\n\n"
+                "Please check your internet connection and try again.")
+            .arg(error));
+}
+
+void MainWindow::executeApiCall() {
+    // Get API type
+    QString apiType = m_apiTypeCombo->currentData().toString();
+    bool isTeamCentraal = (apiType == "teamcentraal");
+
+    // Validate inputs
+    QString org = m_apiOrgInput->text().trimmed();
+    QString endpoint = m_apiEndpointInput->text().trimmed();
+    QString method = m_apiMethodCombo->currentText();
+
+    if (org.isEmpty()) {
+        QMessageBox::warning(this, "Invalid Input", "Organization is required!");
+        return;
+    }
+
+    if (endpoint.isEmpty()) {
+        QMessageBox::warning(this, "Invalid Input", "Endpoint is required!");
+        return;
+    }
+
+    // Validate authentication based on API type
+    QString username, password, pat;
+    if (isTeamCentraal) {
+        username = m_apiUsernameInput->text().trimmed();
+        password = m_apiPasswordInput->text().trimmed();
+
+        if (username.isEmpty() || password.isEmpty()) {
+            QMessageBox::warning(this, "Invalid Input", "Username and Password are required for TeamCentraal!");
+            return;
+        }
+    } else {
+        pat = m_apiPatInput->text().trimmed();
+
+        if (pat.isEmpty()) {
+            QMessageBox::warning(this, "Invalid Input", "PAT Token is required for Azure DevOps!");
+            return;
+        }
+    }
+
+    // Replace placeholders (for Azure DevOps)
+    if (!isTeamCentraal) {
+        QString project = m_apiProjectInput->text().trimmed();
+        endpoint.replace("{project}", project);
+        endpoint.replace("{team}", ""); // TODO: Add team input field if needed
+    }
+
+    // Build full URL based on API type
+    QString url;
+    if (isTeamCentraal) {
+        // TeamCentraal: https://teamcentraal-a.ns.nl/odata/POS_Odata_v4/Teams
+        url = QString("https://%1/%2").arg(org).arg(endpoint);
+    } else {
+        // Azure DevOps: https://dev.azure.com/ns-topaas/_apis/projects
+        url = QString("https://dev.azure.com/%1/%2").arg(org).arg(endpoint);
+    }
+
+    m_apiResponseDisplay->clear();
+    m_apiResponseDisplay->append(QString("<b>API Type:</b> %1\n").arg(isTeamCentraal ? "TeamCentraal" : "Azure DevOps"));
+    m_apiResponseDisplay->append(QString("<b>Request:</b> %1 %2\n").arg(method).arg(url));
+    m_apiResponseDisplay->append("Sending request...\n");
+    QApplication::processEvents();
+
+    // Create request
+    QNetworkRequest request{QUrl(url)};
+
+    // Set headers
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+    // Set authentication based on API type
+    if (isTeamCentraal) {
+        // HTTP Basic Auth with username:password
+        QString credentials = QString("%1:%2").arg(username).arg(password);
+        QByteArray authData = credentials.toUtf8().toBase64();
+        request.setRawHeader("Authorization", "Basic " + authData);
+    } else {
+        // Basic Auth with PAT (:token)
+        QString credentials = QString(":%1").arg(pat);
+        QByteArray authData = credentials.toUtf8().toBase64();
+        request.setRawHeader("Authorization", "Basic " + authData);
+    }
+
+    // Execute request based on method
+    QNetworkReply* reply = nullptr;
+
+    if (method == "GET") {
+        reply = m_apiNetworkManager->get(request);
+    } else if (method == "POST" || method == "PUT" || method == "PATCH") {
+        QByteArray body = m_apiRequestBody->toPlainText().toUtf8();
+
+        if (method == "POST") {
+            reply = m_apiNetworkManager->post(request, body);
+        } else if (method == "PUT") {
+            reply = m_apiNetworkManager->put(request, body);
+        } else {
+            reply = m_apiNetworkManager->sendCustomRequest(request, "PATCH", body);
+        }
+    } else if (method == "DELETE") {
+        reply = m_apiNetworkManager->deleteResource(request);
+    }
+
+    if (!reply) {
+        m_apiResponseDisplay->append("<font color='red'>Failed to create request</font>");
+        return;
+    }
+
+    // Handle response
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        QByteArray responseData = reply->readAll();
+
+        m_apiResponseDisplay->append(QString("\n<b>Status Code:</b> %1\n").arg(statusCode));
+
+        // Color code status
+        QString statusColor = "black";
+        if (statusCode >= 200 && statusCode < 300) {
+            statusColor = "green";
+        } else if (statusCode >= 400) {
+            statusColor = "red";
+        } else if (statusCode >= 300) {
+            statusColor = "orange";
+        }
+
+        m_apiResponseDisplay->append(QString("<font color='%1'><b>HTTP %2</b></font>\n")
+            .arg(statusColor)
+            .arg(statusCode));
+
+        // Parse and format JSON response
+        QJsonParseError parseError;
+        QJsonDocument doc = QJsonDocument::fromJson(responseData, &parseError);
+
+        if (parseError.error == QJsonParseError::NoError) {
+            QString prettyJson = doc.toJson(QJsonDocument::Indented);
+            m_apiResponseDisplay->append("<b>Response Body:</b>");
+            m_apiResponseDisplay->append("<pre>" + prettyJson + "</pre>");
+        } else {
+            m_apiResponseDisplay->append("<b>Response Body (non-JSON):</b>");
+            m_apiResponseDisplay->append("<pre>" + QString::fromUtf8(responseData) + "</pre>");
+        }
+
+        if (reply->error() != QNetworkReply::NoError) {
+            m_apiResponseDisplay->append(QString("\n<font color='red'><b>Error:</b> %1</font>")
+                .arg(reply->errorString()));
+        }
+
+        reply->deleteLater();
+    });
+
+    // Disable execute button while request is in progress
+    m_apiExecuteButton->setEnabled(false);
+    connect(reply, &QNetworkReply::finished, this, [this]() {
+        m_apiExecuteButton->setEnabled(true);
+    });
 }

@@ -1,5 +1,6 @@
 #include "MCPGateway.h"
 #include "MCPServerInstance.h"
+#include "Logger.h"
 #include <QDebug>
 #include <QJsonDocument>
 #include <QJsonArray>
@@ -104,6 +105,7 @@ void MCPGateway::onClientReadyRead() {
 
         qDebug() << "Received from" << getClientId(client) << ":" << line;
         emit messageTraffic("IN", getClientId(client), line);
+        LOG_TRAFFIC("IN", getClientId(client), line);
 
         // Parse JSON message
         QJsonParseError parseError;
@@ -431,6 +433,7 @@ void MCPGateway::sendResponse(QTcpSocket* client, const QJsonObject& response) {
 
     qDebug() << "Sending to" << getClientId(client) << ":" << data.trimmed();
     emit messageTraffic("OUT", getClientId(client), QString::fromUtf8(data.trimmed()));
+    LOG_TRAFFIC("OUT", getClientId(client), QString::fromUtf8(data.trimmed()));
 
     client->write(data);
     client->flush();

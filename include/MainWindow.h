@@ -9,11 +9,13 @@
 #include <QTableWidget>
 #include <QComboBox>
 #include <QListWidget>
+#include "UpdateChecker.h"
 
 class MCPServerManager;
 class MCPGateway;
 class TrafficMonitor;
 class MCPServerInstance;
+class QNetworkAccessManager;
 
 /**
  * @brief Main window for MCP Server Manager
@@ -51,10 +53,17 @@ private slots:
     void onShowTestingDocs();
     void onShowQuickReference();
     void onShowUserManual();
+    void onShowAzureDevOpsApiGuide();
+    void onShowTeamCentraalApiGuide();
     void onOpenDocsFolder();
+    void onOpenLogsFolder();
     void updateGatewayStatus();
     void onManageToolsClicked();
     void updateToolsServerList();
+    void onCheckForUpdates();
+    void onUpdateAvailable(const UpdateChecker::ReleaseInfo& info);
+    void onNoUpdateAvailable();
+    void onUpdateCheckFailed(const QString& error);
 
 private:
     void setupUI();
@@ -63,6 +72,7 @@ private:
     QWidget* createGatewayTab();
     QWidget* createLogsTab();
     QWidget* createToolsBrowserTab();
+    QWidget* createApiTesterTab();
     void loadSettings();
     void saveSettings();
     void populateServerTable();
@@ -70,16 +80,19 @@ private:
     QString statusColor(int status) const;
     QString getSelectedServerName() const;
     void showMarkdownDialog(const QString& title, const QString& filePath, const QString& description);
+    void executeApiCall();
 
     // Helper methods for MCP server installation
     QString extractZipFile(const QString& zipPath, const QString& destDir, QTextEdit* log);
     QString detectServerType(const QString& dirPath, QTextEdit* log);
     QString installDependencies(const QString& dirPath, const QString& serverType, QTextEdit* log);
     QString findEntryPoint(const QString& dirPath, const QString& serverType);
+    QString downloadFile(const QString& url, const QString& destPath);
 
     MCPServerManager* m_manager;
     MCPGateway* m_gateway;
     TrafficMonitor* m_trafficMonitor;
+    UpdateChecker* m_updateChecker;
 
     QTabWidget* m_tabWidget;
     QLabel* m_statusLabel;
@@ -108,4 +121,20 @@ private:
     QTableWidget* m_toolsTable;
     QTextEdit* m_toolDetailsDisplay;
     QPushButton* m_refreshToolsButton;
+
+    // API Tester
+    QComboBox* m_apiTypeCombo;
+    QLineEdit* m_apiOrgInput;
+    QLineEdit* m_apiProjectInput;
+    QLineEdit* m_apiUsernameInput;
+    QLineEdit* m_apiPasswordInput;
+    QComboBox* m_apiMethodCombo;
+    QComboBox* m_apiTemplateCombo;
+    QLineEdit* m_apiEndpointInput;
+    QLineEdit* m_apiPatInput;
+    QTextEdit* m_apiRequestBody;
+    QTextEdit* m_apiResponseDisplay;
+    QPushButton* m_apiExecuteButton;
+    QNetworkAccessManager* m_apiNetworkManager;
+    QLabel* m_apiInfoLabel;
 };

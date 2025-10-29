@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include "MCPServerManager.h"
+#include "Logger.h"
 #include <QApplication>
 #include <QCommandLineParser>
 #include <QCommandLineOption>
@@ -9,6 +10,9 @@
 
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
+
+    // Initialize logging system FIRST
+    qInstallMessageHandler(Logger::messageHandler);
 
     // Set application metadata
     app.setApplicationName("MCP Server Manager");
@@ -94,6 +98,11 @@ int main(int argc, char *argv[]) {
 
     qDebug() << "MCP Server Manager started successfully";
     qDebug() << "Loaded" << manager->serverCount() << "servers";
+    qInfo() << "Logs directory:" << Logger::instance()->logDirectory();
 
-    return app.exec();
+    int result = app.exec();
+
+    // Log shutdown
+    qInfo() << "MCP Server Manager shutting down";
+    return result;
 }

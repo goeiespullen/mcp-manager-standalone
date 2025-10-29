@@ -5,7 +5,7 @@
                 "mcp_servers/devops_server.py"
             ],
             "autostart": false,
-            "command": "/home/laptop/MEGA/development/chatns/chatns_summerschool/.venv/bin/python",
+            "command": "/home/laptop/MEGA/development/chatns/chatns_summerschool_backup_20251026_135643/.venv/bin/python",
             "description": "Azure DevOps MCP Server - Manage work items, sprints, teams",
             "env": {
                 "AZDO_ORG": "ns-topaas"
@@ -14,14 +14,15 @@
             "name": "Azure DevOps",
             "port": 8765,
             "type": "python",
-            "workingDir": "/home/laptop/MEGA/development/chatns/chatns_summerschool"
+            "workingDir": "/home/laptop/MEGA/development/chatns/chatns_summerschool_backup_20251026_135643",
+            "githubRepo": "https://github.com/microsoft/azure-devops-mcp"
         },
         {
             "arguments": [
                 "mcp_servers/confluence_server.py"
             ],
             "autostart": false,
-            "command": "/home/laptop/MEGA/development/chatns/chatns_summerschool/.venv/bin/python",
+            "command": "/home/laptop/MEGA/development/chatns/chatns_summerschool_backup_20251026_135643/.venv/bin/python",
             "description": "Custom Confluence MCP Server",
             "env": {
                 "CONFLUENCE_URL": "https://ns-topaas.atlassian.net/wiki"
@@ -30,14 +31,15 @@
             "name": "Confluence",
             "port": 8766,
             "type": "python",
-            "workingDir": "/home/laptop/MEGA/development/chatns/chatns_summerschool"
+            "workingDir": "/home/laptop/MEGA/development/chatns/chatns_summerschool_backup_20251026_135643",
+            "githubRepo": "https://github.com/sooperset/mcp-atlassian"
         },
         {
             "arguments": [
                 "mcp_servers/chatns_server.py"
             ],
             "autostart": false,
-            "command": "/home/laptop/MEGA/development/chatns/chatns_summerschool/.venv/bin/python",
+            "command": "/home/laptop/MEGA/development/chatns/chatns_summerschool_backup_20251026_135643/.venv/bin/python",
             "description": "ChatNS MCP Server - AI chat and semantic search",
             "env": {
             },
@@ -45,14 +47,14 @@
             "name": "ChatNS",
             "port": 8767,
             "type": "python",
-            "workingDir": "/home/laptop/MEGA/development/chatns/chatns_summerschool"
+            "workingDir": "/home/laptop/MEGA/development/chatns/chatns_summerschool_backup_20251026_135643"
         },
         {
             "arguments": [
                 "mcp_servers/demo_mcp_server.py"
             ],
             "autostart": false,
-            "command": "/home/laptop/MEGA/development/chatns/chatns_summerschool/.venv/bin/python",
+            "command": "/home/laptop/MEGA/development/chatns/chatns_summerschool_backup_20251026_135643/.venv/bin/python",
             "description": "Demo MCP Server - Proves gateway works with standard MCP protocol",
             "env": {
             },
@@ -60,14 +62,14 @@
             "name": "Demo MCP",
             "port": 8768,
             "type": "python",
-            "workingDir": "/home/laptop/MEGA/development/chatns/chatns_summerschool"
+            "workingDir": "/home/laptop/MEGA/development/chatns/chatns_summerschool_backup_20251026_135643"
         },
         {
             "arguments": [
                 "mcp-servers/email-mcp-server-master/main.py"
             ],
             "autostart": false,
-            "command": "/home/laptop/MEGA/development/chatns/chatns_summerschool/.venv/bin/python",
+            "command": "/home/laptop/MEGA/development/chatns/chatns_summerschool_backup_20251026_135643/.venv/bin/python",
             "description": "Email MCP Server - Send emails via SMTP",
             "env": {
                 "SMTP_HOST": "smtp.example.com",
@@ -81,7 +83,7 @@
             "name": "Email Server",
             "port": 8769,
             "type": "python",
-            "workingDir": "/home/laptop/MEGA/development/chatns/chatns_summerschool"
+            "workingDir": "/home/laptop/MEGA/development/chatns/chatns_summerschool_backup_20251026_135643"
         }
     ],
     "version": "1.0"

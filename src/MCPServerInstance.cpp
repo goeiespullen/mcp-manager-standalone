@@ -5,6 +5,7 @@
 #include <QJsonDocument>
 #include <QJsonParseError>
 #include <QThread>
+#include <QDir>
 
 MCPServerInstance::MCPServerInstance(const QJsonObject& config, QObject* parent)
     : QObject(parent)
@@ -25,6 +26,7 @@ MCPServerInstance::MCPServerInstance(const QJsonObject& config, QObject* parent)
     m_command = config["command"].toString();
     m_port = static_cast<quint16>(config["port"].toInt(8765));
     m_workingDir = config["workingDir"].toString();
+    m_githubRepo = config["githubRepo"].toString(""); // Optional GitHub repository URL
     m_autoStart = config["autostart"].toBool(false);
     m_healthCheckInterval = config["healthCheckInterval"].toInt(30000); // 30s default
 

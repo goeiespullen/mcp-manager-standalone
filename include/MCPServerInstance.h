@@ -44,6 +44,8 @@ public:
     QString statusString() const;
     bool isRunning() const { return m_status == Running; }
     bool autoStart() const { return m_autoStart; }
+    QString githubRepo() const { return m_githubRepo; }
+    QString workingDir() const { return m_workingDir; }
 
     // Tool management
     struct ToolInfo {
@@ -105,6 +107,7 @@ private:
     QStringList m_arguments;
     quint16 m_port;
     QString m_workingDir;
+    QString m_githubRepo;     // GitHub repository URL (optional, for updates)
     QJsonObject m_environment;
     bool m_autoStart;
     int m_healthCheckInterval;  // milliseconds

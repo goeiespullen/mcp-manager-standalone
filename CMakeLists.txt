@@ -21,6 +21,9 @@ set(SOURCES
     src/MCPGateway.cpp
     src/AzureDevOpsClient.cpp
     src/TrafficMonitor.cpp
+    src/UpdateChecker.cpp
+    src/UpdateDialog.cpp
+    src/Logger.cpp
 )
 
 set(HEADERS
@@ -32,6 +35,10 @@ set(HEADERS
     include/MCPGateway.h
     include/AzureDevOpsClient.h
     include/TrafficMonitor.h
+    include/Version.h
+    include/UpdateChecker.h
+    include/UpdateDialog.h
+    include/Logger.h
 )
 
 # Create executable
