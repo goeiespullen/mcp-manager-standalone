@@ -1,0 +1,7 @@
+# TeamCentraal MCP Server Dependencies
+
+# HTTP Client voor API calls
+requests>=2.31.0
+
+# Type hints (voor Python < 3.9)
+typing-extensions>=4.0.0
