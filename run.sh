@@ -25,6 +25,15 @@ if [ ! -f "build/mcp-manager" ]; then
     echo "✅ Build complete"
 fi
 
+# Sync credentials from keystore
+echo "🔑 Syncing credentials from keystore..."
+../chatns_summerschool/.venv/bin/python sync_keystore_to_config.py
+if [ $? -eq 0 ]; then
+    echo "✅ Credentials synced"
+else
+    echo "⚠️  Warning: Could not sync credentials from keystore"
+fi
+
 echo ""
 echo "🚀 Starting MCP Manager..."
 echo "   Gateway will listen on port 8700"
