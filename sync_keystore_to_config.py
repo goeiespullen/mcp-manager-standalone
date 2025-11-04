@@ -17,7 +17,13 @@ from dashapp.keystore import get_keystore
 
 
 def sync_credentials():
-    """Sync keystore credentials to servers.json."""
+    """
+    Export keystore credentials to environment variables.
+
+    SECURITY NOTE: This script NO LONGER writes credentials to servers.json.
+    Credentials are exported to environment variables only, which are inherited
+    by MCP Manager and passed to child processes.
+    """
 
     # Get keystore from chatns_summerschool directory
     keystore_path = Path(__file__).parent.parent / "chatns_summerschool" / ".keystore"
@@ -30,15 +36,13 @@ def sync_credentials():
     print(f"📖 Loading keystore from {keystore_path}")
     ks = get_keystore(str(keystore_path), str(keystore_key_path))
 
-    # Load servers.json
+    # Verify servers.json exists (but we don't modify it)
     config_path = Path(__file__).parent / "configs" / "servers.json"
     if not config_path.exists():
         print(f"❌ Config not found: {config_path}")
         return False
 
     print(f"📖 Loading config from {config_path}")
-    with open(config_path, 'r') as f:
-        config = json.load(f)
 
     # Mapping of server names to keystore services
     service_mappings = {
@@ -48,55 +52,34 @@ def sync_credentials():
         'ChatNS': 'chatns',
     }
 
-    updated = False
+    # Export credentials to environment variables (inherited by child processes)
+    import os
+    exported = False
 
-    # Update each server's env with keystore credentials
-    for server in config.get('servers', []):
-        server_name = server.get('name')
-
-        if server_name not in service_mappings:
-            continue
-
-        service = service_mappings[server_name]
-
-        # Get credentials from keystore
-        creds = ks.get_service_credentials(service)
-
-        if not creds:
-            print(f"ℹ️  No credentials in keystore for {server_name}")
-            continue
-
+    for service_name, service_key in service_mappings.items():
         # Get environment variable mapping
-        env_vars = ks.export_to_env(service)
+        env_vars = ks.export_to_env(service_key)
 
         if not env_vars:
-            print(f"ℹ️  No env vars to export for {server_name}")
+            print(f"ℹ️  No env vars to export for {service_name}")
             continue
 
-        # Update server env
-        if 'env' not in server:
-            server['env'] = {}
-
         for env_key, env_value in env_vars.items():
-            # Only update if the current value is empty or placeholder
-            current_value = server['env'].get(env_key, '')
-            if not current_value or current_value == '':
-                server['env'][env_key] = env_value
-                print(f"✅ Updated {server_name}: {env_key}")
-                updated = True
+            # Skip if already set (don't override existing env vars)
+            if os.environ.get(env_key):
+                print(f"ℹ️  Skipped {service_name}: {env_key} (already set)")
             else:
-                print(f"ℹ️  Skipped {server_name}: {env_key} (already set)")
+                os.environ[env_key] = env_value
+                print(f"✅ Exported {service_name}: {env_key}")
+                exported = True
 
-    if updated:
-        # Save updated config
-        print(f"\n💾 Saving updated config to {config_path}")
-        with open(config_path, 'w') as f:
-            json.dump(config, f, indent=4)
-        print("✅ Config updated successfully!")
-        return True
-    else:
+    if not exported:
         print("\nℹ️  No updates needed")
         return False
+    else:
+        print("\n✅ Credentials exported to environment variables")
+        print("   MCP servers will inherit these credentials at runtime")
+        return True
 
 
 if __name__ == '__main__':
