@@ -1417,9 +1417,8 @@ void MainWindow::onEditServerClicked() {
 }
 
 void MainWindow::onReloadConfigClicked() {
-    QSettings settings;
-    QString configPath = settings.value("configPath",
-        "../configs/servers.json").toString();
+    // Use the manager's stored config path
+    QString configPath = m_manager->configPath();
 
     if (m_manager->loadConfig(configPath)) {
         m_logDisplay->append("<b>Configuration reloaded successfully</b>");
@@ -1431,11 +1430,8 @@ void MainWindow::onReloadConfigClicked() {
 }
 
 void MainWindow::onSaveConfigClicked() {
-    QSettings settings;
-    QString configPath = settings.value("configPath",
-        "../configs/servers.json").toString();
-
-    if (m_manager->saveConfig(configPath)) {
+    // Pass empty string to use the manager's stored config path
+    if (m_manager->saveConfig("")) {
         m_logDisplay->append("<b>Configuration saved successfully</b>");
         QMessageBox::information(this, "Success", "Configuration saved successfully!");
     } else {

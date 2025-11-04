@@ -26,6 +26,7 @@ public:
     bool loadConfig(const QString& configPath);
     bool saveConfig(const QString& configPath);
     QJsonObject currentConfig() const;
+    QString configPath() const;
 
     // Server management
     bool addServer(const QJsonObject& serverConfig);
