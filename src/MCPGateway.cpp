@@ -88,13 +88,28 @@ void MCPGateway::onClientReadyRead() {
         return;
     }
 
+    // Check if client still exists (could have disconnected during signal processing)
+    if (!m_clientBuffers.contains(client)) {
+        return;
+    }
+
     // Read data into buffer
     QByteArray data = client->readAll();
     m_clientBuffers[client] += QString::fromUtf8(data);
 
+    // Check again - client could have disconnected after readAll()
+    if (!m_clientBuffers.contains(client)) {
+        return;
+    }
+
     // Process complete messages (line-delimited JSON)
     QString& buffer = m_clientBuffers[client];
     while (buffer.contains('\n')) {
+        // Check if still connected (signals can be processed during event loop)
+        if (!m_clientBuffers.contains(client)) {
+            return;
+        }
+
         int newlinePos = buffer.indexOf('\n');
         QString line = buffer.left(newlinePos).trimmed();
         buffer.remove(0, newlinePos + 1);
