@@ -10,29 +10,12 @@
             "env": {
                 "AZDO_ORG": "ns-topaas"
             },
+            "githubRepo": "https://github.com/microsoft/azure-devops-mcp",
             "healthCheckInterval": 30000,
             "name": "Azure DevOps",
             "port": 8765,
             "type": "python",
-            "workingDir": "/home/laptop/MEGA/development/chatns/mcp-manager",
-            "githubRepo": "https://github.com/microsoft/azure-devops-mcp"
-        },
-        {
-            "arguments": [
-                "mcp_servers/confluence_server.py"
-            ],
-            "autostart": false,
-            "command": "/home/laptop/MEGA/development/chatns/chatns_summerschool/.venv/bin/python",
-            "description": "Custom Confluence MCP Server",
-            "env": {
-                "CONFLUENCE_URL": "https://ns-topaas.atlassian.net/wiki"
-            },
-            "healthCheckInterval": 30000,
-            "name": "Confluence",
-            "port": 8766,
-            "type": "python",
-            "workingDir": "/home/laptop/MEGA/development/chatns/mcp-manager",
-            "githubRepo": "https://github.com/sooperset/mcp-atlassian"
+            "workingDir": "/home/laptop/MEGA/development/chatns/mcp-manager"
         },
         {
             "arguments": [
@@ -51,39 +34,20 @@
         },
         {
             "arguments": [
-                "mcp_servers/demo_mcp_server.py"
+                "mcp_servers/confluence_server.py"
             ],
             "autostart": false,
             "command": "/home/laptop/MEGA/development/chatns/chatns_summerschool/.venv/bin/python",
-            "description": "Demo MCP Server - Proves gateway works with standard MCP protocol",
+            "description": "Custom Confluence MCP Server",
             "env": {
+                "CONFLUENCE_URL": "https://ns-topaas.atlassian.net/wiki"
             },
+            "githubRepo": "https://github.com/sooperset/mcp-atlassian",
             "healthCheckInterval": 30000,
-            "name": "Demo MCP",
-            "port": 8768,
+            "name": "Confluence",
+            "port": 8766,
             "type": "python",
             "workingDir": "/home/laptop/MEGA/development/chatns/mcp-manager"
-        },
-        {
-            "arguments": [
-                "mcp-servers/email-mcp-server-master/main.py"
-            ],
-            "autostart": false,
-            "command": "/home/laptop/MEGA/development/chatns/chatns_summerschool/.venv/bin/python",
-            "description": "Email MCP Server - Send emails via SMTP",
-            "env": {
-                "SMTP_HOST": "smtp.example.com",
-                "SMTP_PORT": "587",
-                "SMTP_SECURE": "false",
-                "SMTP_USER": "user@example.com",
-                "SMTP_FROM": "user@example.com",
-                "SMTP_PASS": ""
-            },
-            "healthCheckInterval": 30000,
-            "name": "Email Server",
-            "port": 8769,
-            "type": "python",
-            "workingDir": "/home/laptop/MEGA/development/chatns/chatns_summerschool"
         },
         {
             "arguments": [
@@ -93,16 +57,14 @@
             "command": "/home/laptop/MEGA/development/chatns/chatns_summerschool/.venv/bin/python",
             "description": "TeamCentraal MCP Server - NS Team registry OData API access",
             "env": {
-                "TEAMCENTRAAL_URL": "https://teamcentraal-a.ns.nl/odata/POS_Odata_v4",
-                "TEAMCENTRAAL_USERNAME": "",
-                "TEAMCENTRAAL_PASSWORD": ""
+                "TEAMCENTRAAL_URL": "https://teamcentraal.ns.nl/odata/POS_Odata_v4"
             },
+            "githubRepo": "https://github.com/ns-topaas/teamcentraal-mcp",
             "healthCheckInterval": 30000,
             "name": "TeamCentraal",
             "port": 8770,
             "type": "python",
-            "workingDir": "/home/laptop/MEGA/development/chatns/mcp-manager",
-            "githubRepo": "https://github.com/ns-topaas/teamcentraal-mcp"
+            "workingDir": "/home/laptop/MEGA/development/chatns/mcp-manager"
         }
     ],
     "version": "1.0"
