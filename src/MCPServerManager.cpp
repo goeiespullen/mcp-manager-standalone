@@ -12,7 +12,9 @@ MCPServerManager::MCPServerManager(QObject* parent)
 
 MCPServerManager::~MCPServerManager() {
     stopAll();
-    qDeleteAll(m_servers);
+    // Qt will automatically delete child objects (MCPServerInstance has 'this' as parent)
+    // No need for qDeleteAll - that would cause double-delete!
+    m_servers.clear();
 }
 
 bool MCPServerManager::loadConfig(const QString& configPath) {
@@ -43,7 +45,10 @@ bool MCPServerManager::loadConfig(const QString& configPath) {
 
     // Clear existing servers
     stopAll();
-    qDeleteAll(m_servers);
+    // Use deleteLater() to safely schedule deletion (avoids double-delete)
+    for (MCPServerInstance* server : m_servers) {
+        server->deleteLater();
+    }
     m_servers.clear();
 
     // Load servers from config
@@ -90,6 +95,10 @@ bool MCPServerManager::saveConfig(const QString& configPath) {
 
 QJsonObject MCPServerManager::currentConfig() const {
     return m_config;
+}
+
+QString MCPServerManager::configPath() const {
+    return m_configPath;
 }
 
 bool MCPServerManager::addServer(const QJsonObject& serverConfig) {
