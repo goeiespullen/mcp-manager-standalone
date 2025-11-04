@@ -291,25 +291,51 @@ async def _semantic_search(args: dict) -> List[TextContent]:
 
 
 async def _list_buckets(args: dict) -> List[TextContent]:
-    """List available knowledge buckets."""
+    """List available knowledge buckets from ChatNS API."""
     try:
-        # This would need to be implemented based on ChatNS API
-        # For now, return a placeholder
-        result = {
-            "status": "success",
-            "buckets": [
-                {"id": 1, "name": "General Knowledge", "description": "General purpose knowledge base"},
-                {"id": 2, "name": "Technical Docs", "description": "Technical documentation and guides"}
-            ],
-            "note": "Bucket listing may need ChatNS API extension"
-        }
+        # Try to fetch buckets from ChatNS V2 API
+        base_url = config.chatns_api_url.replace("/chat/completions", "")
+        buckets_url = f"{base_url}/buckets"
 
-        return [TextContent(type="text", text=json.dumps(result, indent=2))]
+        try:
+            response = _get_json(buckets_url, timeout=30)
+
+            # Format the response
+            buckets = response if isinstance(response, list) else response.get("buckets", [])
+
+            result = {
+                "status": "success",
+                "count": len(buckets),
+                "buckets": buckets,
+                "source": "ChatNS API V2"
+            }
+
+            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+        except ChatNSAPIError as api_error:
+            # If API endpoint doesn't exist, return known buckets
+            if "404" in str(api_error) or "Not Found" in str(api_error):
+                result = {
+                    "status": "partial",
+                    "note": "Buckets endpoint not available, returning known buckets",
+                    "buckets": [
+                        {
+                            "id": 571,
+                            "name": "Scrum & Agile Knowledge Base",
+                            "description": "Scrum guides, agile methodologies, team dynamics"
+                        }
+                    ],
+                    "source": "Configured buckets"
+                }
+                return [TextContent(type="text", text=json.dumps(result, indent=2))]
+            else:
+                raise
 
     except Exception as e:
         error_result = {
             "status": "error",
-            "error": str(e)
+            "error": str(e),
+            "attempted_url": f"{base_url}/buckets" if 'base_url' in locals() else "unknown"
         }
         return [TextContent(type="text", text=json.dumps(error_result, indent=2))]
 
