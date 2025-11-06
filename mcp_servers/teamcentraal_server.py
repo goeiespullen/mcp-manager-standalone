@@ -42,15 +42,18 @@ class TeamCentraalAPI:
             'User-Agent': 'curl/8.0.1'  # Mimic curl to bypass Azure App Gateway filtering
         })
 
-    def _make_request(self, endpoint: str, params: Optional[Dict] = None) -> Dict[str, Any]:
+    def _make_request(self, endpoint: str, params: Optional[Dict] = None, timeout: int = 90) -> Dict[str, Any]:
         """Maak een API request."""
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
 
         try:
             logger.info(f"API Request: {endpoint}")
-            response = self.session.get(url, params=params, timeout=30)
+            response = self.session.get(url, params=params, timeout=timeout)
             response.raise_for_status()
             return response.json()
+        except requests.exceptions.Timeout as e:
+            logger.error(f"API Timeout after {timeout}s: {endpoint}")
+            raise Exception(f"TeamCentraal API timeout after {timeout}s - query te complex. Probeer met minder expand opties.")
         except requests.exceptions.RequestException as e:
             logger.error(f"API Error: {e}")
             raise Exception(f"TeamCentraal API error: {str(e)}")
@@ -213,20 +216,28 @@ class TeamCentraalMCPServer:
                 }
             },
             "list_team_members": {
-                "description": "Haal teamleden op voor een specifiek team",
+                "description": "Haal teamleden op voor een specifiek team. Accepteert team ID of team naam (bijv. 'DIA.NSXR').",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "team_id": {
                             "type": "string",
-                            "description": "Team ID om teamleden voor op te halen (VERPLICHT)"
+                            "description": "Team ID (numeriek)"
+                        },
+                        "team_name": {
+                            "type": "string",
+                            "description": "Team naam (bijv. 'DIA.NSXR'). Wordt automatisch omgezet naar team ID."
                         },
                         "expand": {
                             "type": "string",
-                            "description": "Gerelateerde data (bijv. \"TeamMember_Team,Account,FunctieRols\")"
+                            "description": "Gerelateerde data. Default: 'Account'. Voor meer details gebruik 'Account,FunctieRols'"
+                        },
+                        "top": {
+                            "type": "number",
+                            "description": "Maximaal aantal resultaten (default: 100)"
                         }
                     },
-                    "required": ["team_id"]
+                    "required": []
                 }
             },
             "list_departments": {
@@ -366,13 +377,61 @@ class TeamCentraalMCPServer:
                 return self._format_response(result)
 
             elif tool_name == "list_team_members":
-                filter_query = None
-                if "team_id" in arguments:
-                    filter_query = f"TeamMember_Team/ID eq {arguments['team_id']}"
-                result = self.api.get_team_members(
-                    filter_query=filter_query,
-                    expand=arguments.get("expand", "TeamMember_Team,Account,FunctieRols")
-                )
+                # Bepaal team ID (zoek op naam indien nodig)
+                team_id = arguments.get("team_id")
+                team_name = arguments.get("team_name")
+
+                if not team_id and not team_name:
+                    return {
+                        "content": [{
+                            "type": "text",
+                            "text": "❌ Error: Geef team_id of team_name op"
+                        }]
+                    }
+
+                # Als team_name gegeven is, zoek eerst het team op
+                if team_name and not team_id:
+                    logger.info(f"Zoeken naar team met naam: {team_name}")
+                    search_result = self.api.search_teams(team_name)
+
+                    if not search_result.get("value"):
+                        return {
+                            "content": [{
+                                "type": "text",
+                                "text": f"❌ Team '{team_name}' niet gevonden"
+                            }]
+                        }
+
+                    # Neem het eerste resultaat
+                    teams = search_result["value"]
+                    if len(teams) > 1:
+                        logger.warning(f"Meerdere teams gevonden voor '{team_name}', gebruik eerste match")
+
+                    team_id = teams[0]["ID"]
+                    logger.info(f"Team '{team_name}' gevonden met ID: {team_id}")
+
+                # Haal teamleden op met geoptimaliseerde query
+                # Gebruik direct filter op TeamMembers in plaats van navigatie
+                filter_query = f"TeamMember_Team/ID eq {team_id}"
+                expand = arguments.get("expand", "Account")  # Default alleen Account, niet alle relaties
+                top = arguments.get("top", 100)
+
+                logger.info(f"Ophalen teamleden voor team ID {team_id} (expand: {expand})")
+
+                # Gebruik aangepaste timeout voor deze query
+                params = {"$filter": filter_query, "$expand": expand, "$top": top}
+                try:
+                    result = self.api._make_request('TeamMembers', params, timeout=90)
+                except Exception as e:
+                    if "timeout" in str(e).lower():
+                        return {
+                            "content": [{
+                                "type": "text",
+                                "text": f"❌ Timeout: Query duurde te lang. Probeer met minder expand opties (nu: '{expand}'). Gebruik alleen 'Account' in plaats van 'Account,FunctieRols,TeamMember_Team'"
+                            }]
+                        }
+                    raise
+
                 return self._format_response(result)
 
             elif tool_name == "list_departments":
