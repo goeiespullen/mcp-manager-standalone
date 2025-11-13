@@ -49,6 +49,11 @@ public:
     int stoppedCount() const;
     QMap<QString, MCPServerInstance::ServerStatus> allStatuses() const;
 
+    // Permission management
+    bool getGlobalPermission(MCPServerInstance::PermissionCategory category) const;
+    void setGlobalPermission(MCPServerInstance::PermissionCategory category, bool enabled);
+    QMap<MCPServerInstance::PermissionCategory, bool> globalPermissions() const { return m_globalPermissions; }
+
 signals:
     void serverAdded(const QString& name);
     void serverRemoved(const QString& name);
@@ -72,4 +77,5 @@ private:
     QMap<QString, MCPServerInstance*> m_servers;
     QString m_configPath;
     QJsonObject m_config;
+    QMap<MCPServerInstance::PermissionCategory, bool> m_globalPermissions;
 };

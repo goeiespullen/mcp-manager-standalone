@@ -43,6 +43,38 @@ bool MCPServerManager::loadConfig(const QString& configPath) {
     m_config = doc.object();
     m_configPath = configPath;
 
+    // Load global permission defaults
+    m_globalPermissions.clear();
+    m_globalPermissions[MCPServerInstance::READ_REMOTE] = true;  // Default safe values
+    m_globalPermissions[MCPServerInstance::WRITE_REMOTE] = false;
+    m_globalPermissions[MCPServerInstance::WRITE_LOCAL] = false;
+    m_globalPermissions[MCPServerInstance::EXECUTE_AI] = false;
+    m_globalPermissions[MCPServerInstance::EXECUTE_CODE] = false;
+
+    if (m_config.contains("permissions")) {
+        QJsonObject perms = m_config["permissions"].toObject();
+        if (perms.contains("global_defaults")) {
+            QJsonObject globalDefaults = perms["global_defaults"].toObject();
+            if (globalDefaults.contains("READ_REMOTE"))
+                m_globalPermissions[MCPServerInstance::READ_REMOTE] = globalDefaults["READ_REMOTE"].toBool();
+            if (globalDefaults.contains("WRITE_REMOTE"))
+                m_globalPermissions[MCPServerInstance::WRITE_REMOTE] = globalDefaults["WRITE_REMOTE"].toBool();
+            if (globalDefaults.contains("WRITE_LOCAL"))
+                m_globalPermissions[MCPServerInstance::WRITE_LOCAL] = globalDefaults["WRITE_LOCAL"].toBool();
+            if (globalDefaults.contains("EXECUTE_AI"))
+                m_globalPermissions[MCPServerInstance::EXECUTE_AI] = globalDefaults["EXECUTE_AI"].toBool();
+            if (globalDefaults.contains("EXECUTE_CODE"))
+                m_globalPermissions[MCPServerInstance::EXECUTE_CODE] = globalDefaults["EXECUTE_CODE"].toBool();
+        }
+    }
+
+    qDebug() << "Global permissions loaded:"
+             << "READ_REMOTE=" << m_globalPermissions[MCPServerInstance::READ_REMOTE]
+             << "WRITE_REMOTE=" << m_globalPermissions[MCPServerInstance::WRITE_REMOTE]
+             << "WRITE_LOCAL=" << m_globalPermissions[MCPServerInstance::WRITE_LOCAL]
+             << "EXECUTE_AI=" << m_globalPermissions[MCPServerInstance::EXECUTE_AI]
+             << "EXECUTE_CODE=" << m_globalPermissions[MCPServerInstance::EXECUTE_CODE];
+
     // Clear existing servers
     stopAll();
     // Use deleteLater() to safely schedule deletion (avoids double-delete)
@@ -72,10 +104,47 @@ bool MCPServerManager::saveConfig(const QString& configPath) {
     // Build servers array from current instances
     QJsonArray serversArray;
     for (MCPServerInstance* server : m_servers) {
-        serversArray.append(server->config());
+        QJsonObject serverConfig = server->config();
+
+        // Update permissions in config - only save explicit overrides
+        QMap<MCPServerInstance::PermissionCategory, bool> explicitPerms = server->explicitPermissions();
+        if (!explicitPerms.isEmpty()) {
+            QJsonObject permsObj;
+            for (auto it = explicitPerms.begin(); it != explicitPerms.end(); ++it) {
+                QString permName;
+                switch (it.key()) {
+                    case MCPServerInstance::READ_REMOTE: permName = "READ_REMOTE"; break;
+                    case MCPServerInstance::WRITE_REMOTE: permName = "WRITE_REMOTE"; break;
+                    case MCPServerInstance::WRITE_LOCAL: permName = "WRITE_LOCAL"; break;
+                    case MCPServerInstance::EXECUTE_AI: permName = "EXECUTE_AI"; break;
+                    case MCPServerInstance::EXECUTE_CODE: permName = "EXECUTE_CODE"; break;
+                }
+                permsObj[permName] = it.value();
+            }
+            serverConfig["permissions"] = permsObj;
+        } else {
+            // No explicit overrides, remove permissions key
+            serverConfig.remove("permissions");
+        }
+
+        serversArray.append(serverConfig);
     }
 
+    // Build root config with global permissions
     QJsonObject root = m_config;
+
+    // Update global permissions
+    QJsonObject globalDefaultsObj;
+    globalDefaultsObj["READ_REMOTE"] = m_globalPermissions.value(MCPServerInstance::READ_REMOTE, true);
+    globalDefaultsObj["WRITE_REMOTE"] = m_globalPermissions.value(MCPServerInstance::WRITE_REMOTE, false);
+    globalDefaultsObj["WRITE_LOCAL"] = m_globalPermissions.value(MCPServerInstance::WRITE_LOCAL, false);
+    globalDefaultsObj["EXECUTE_AI"] = m_globalPermissions.value(MCPServerInstance::EXECUTE_AI, false);
+    globalDefaultsObj["EXECUTE_CODE"] = m_globalPermissions.value(MCPServerInstance::EXECUTE_CODE, false);
+
+    QJsonObject permissionsObj;
+    permissionsObj["global_defaults"] = globalDefaultsObj;
+    root["permissions"] = permissionsObj;
+
     root["servers"] = serversArray;
 
     QJsonDocument doc(root);
@@ -118,6 +187,9 @@ bool MCPServerManager::addServer(const QJsonObject& serverConfig) {
 
     // Create new instance
     MCPServerInstance* server = new MCPServerInstance(serverConfig, this);
+
+    // Set manager pointer for global permission fallback
+    server->setManager(this);
 
     // Connect signals
     connect(server, &MCPServerInstance::statusChanged,
@@ -324,4 +396,13 @@ bool MCPServerManager::validateServerConfig(const QJsonObject& config, QString& 
     }
 
     return true;
+}
+
+bool MCPServerManager::getGlobalPermission(MCPServerInstance::PermissionCategory category) const {
+    return m_globalPermissions.value(category, false);
+}
+
+void MCPServerManager::setGlobalPermission(MCPServerInstance::PermissionCategory category, bool enabled) {
+    m_globalPermissions[category] = enabled;
+    qDebug() << "Global permission" << category << "set to" << enabled;
 }

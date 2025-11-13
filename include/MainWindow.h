@@ -60,10 +60,16 @@ private slots:
     void updateGatewayStatus();
     void onManageToolsClicked();
     void updateToolsServerList();
+    void refreshToolsBrowserTable();
     void onCheckForUpdates();
     void onUpdateAvailable(const UpdateChecker::ReleaseInfo& info);
     void onNoUpdateAvailable();
     void onUpdateCheckFailed(const QString& error);
+    void onPermissionsChanged();
+    void onGlobalPermissionChanged(int category, bool enabled);
+    void onServerPermissionChanged(const QString& serverName, int category, bool enabled);
+    void onResetServerPermissions(const QString& serverName, int row);
+    void onDiscardAllChanges();
 
 private:
     void setupUI();
@@ -73,11 +79,15 @@ private:
     QWidget* createLogsTab();
     QWidget* createToolsBrowserTab();
     QWidget* createApiTesterTab();
+    QWidget* createPermissionsTab();
     void loadSettings();
     void saveSettings();
     void populateServerTable();
     QString statusIcon(int status) const;
     QString statusColor(int status) const;
+    void updateChangeLog();
+    void clearChangeLog();
+    void addChangeLogEntry(const QString& entry);
     QString getSelectedServerName() const;
     void showMarkdownDialog(const QString& title, const QString& filePath, const QString& description);
     void executeApiCall();
@@ -137,4 +147,13 @@ private:
     QPushButton* m_apiExecuteButton;
     QNetworkAccessManager* m_apiNetworkManager;
     QLabel* m_apiInfoLabel;
+
+    // Permissions
+    QTableWidget* m_permissionsTable;
+    QMap<int, class QCheckBox*> m_globalPermissionCheckboxes;  // category -> checkbox
+    QTextEdit* m_changeLogDisplay;  // Unsaved changes
+    QTextEdit* m_changeHistoryDisplay;  // Permanent history with timestamps
+    QPushButton* m_discardButton;
+    QStringList m_changeLogEntries;  // Unsaved changes (cleared on save)
+    QStringList m_changeHistoryEntries;  // Permanent history with timestamps
 };

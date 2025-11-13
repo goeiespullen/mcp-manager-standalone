@@ -18,20 +18,44 @@ from typing import List, Dict, Any, Optional
 
 import requests
 from mcp.server import Server
-from mcp.types import Tool, TextContent
+from mcp.types import Tool as BaseTool, TextContent
+
+# Extend Tool class to support permissions
+class Tool(BaseTool):
+    """Extended Tool class with permissions support."""
+    def __init__(self, *args, permissions=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.permissions = permissions or {}
+
+    def model_dump(self, **kwargs):
+        """Override serialization to include permissions."""
+        data = super().model_dump(**kwargs)
+        if hasattr(self, 'permissions'):
+            data['permissions'] = self.permissions
+        return data
 
 try:
     from shared.config import MCPServerConfig
+    from shared.permissions import PermissionCategory, get_tool_permission_metadata
 except ImportError:
     # Fallback for when called from dashboard
     import sys
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).parent))
     from shared.config import MCPServerConfig
+    from shared.permissions import PermissionCategory, get_tool_permission_metadata
 
 # Initialize server
 server = Server("chatns-server")
 config = MCPServerConfig.from_env()
+
+# Tool permission mappings
+TOOL_PERMISSIONS = {
+    "chat_completion": [PermissionCategory.EXECUTE_AI],
+    "semantic_search": [PermissionCategory.READ_REMOTE],
+    "list_buckets": [PermissionCategory.READ_REMOTE],
+    "health_check": [PermissionCategory.READ_REMOTE],
+}
 
 
 class ChatNSAPIError(Exception):
@@ -95,7 +119,7 @@ def _get_json(url: str, timeout: int = 30) -> dict:
 @server.list_tools()
 async def list_tools() -> List[Tool]:
     """List available ChatNS tools."""
-    return [
+    tools = [
         Tool(
             name="chat_completion",
             description="Send a chat completion request to ChatNS AI models",
@@ -186,6 +210,17 @@ async def list_tools() -> List[Tool]:
             }
         )
     ]
+
+    # Add permissions metadata to each tool
+    for tool in tools:
+        # Get permissions for this tool from TOOL_PERMISSIONS dict
+        perms = TOOL_PERMISSIONS.get(tool.name, [PermissionCategory.READ_REMOTE])
+        perm_strings = [p.value if isinstance(p, PermissionCategory) else p for p in perms]
+
+        # Add permissions as an attribute (MCP SDK should serialize this)
+        tool.permissions = get_tool_permission_metadata(tool.name, "chatns", perm_strings)
+
+    return tools
 
 
 @server.call_tool()

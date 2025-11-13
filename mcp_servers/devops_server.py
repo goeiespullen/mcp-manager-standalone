@@ -20,20 +20,53 @@ from urllib.parse import quote
 import requests
 from requests.auth import HTTPBasicAuth
 from mcp.server import Server
-from mcp.types import Tool, TextContent
+from mcp.types import Tool as BaseTool, TextContent
+from typing import Any as ToolAny
+
+# Extend Tool class to support permissions
+class Tool(BaseTool):
+    """Extended Tool class with permissions support."""
+    def __init__(self, *args, permissions=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.permissions = permissions or {}
+
+    def model_dump(self, **kwargs):
+        """Override serialization to include permissions."""
+        data = super().model_dump(**kwargs)
+        if hasattr(self, 'permissions'):
+            data['permissions'] = self.permissions
+        return data
 
 try:
     from shared.config import MCPServerConfig
+    from shared.permissions import PermissionCategory, get_tool_permission_metadata
 except ImportError:
     # Fallback for when called from dashboard
     import sys
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).parent))
     from shared.config import MCPServerConfig
+    from shared.permissions import PermissionCategory, get_tool_permission_metadata
 
 # Initialize server
 server = Server("devops-server")
 config = MCPServerConfig.from_env()
+
+# Tool permission mappings
+TOOL_PERMISSIONS = {
+    "list_projects": [PermissionCategory.READ_REMOTE],
+    "list_teams": [PermissionCategory.READ_REMOTE],
+    "get_team_iterations": [PermissionCategory.READ_REMOTE],
+    "get_current_iteration": [PermissionCategory.READ_REMOTE],
+    "health_check": [PermissionCategory.READ_REMOTE],
+    "list_repositories": [PermissionCategory.READ_REMOTE],
+    "get_repository_files": [PermissionCategory.READ_REMOTE],
+    "get_file_content": [PermissionCategory.READ_REMOTE],
+    "search_code": [PermissionCategory.READ_REMOTE],
+    "get_work_items": [PermissionCategory.READ_REMOTE],
+    "get_work_item_details": [PermissionCategory.READ_REMOTE],
+    "refresh_data": [PermissionCategory.EXECUTE_CODE, PermissionCategory.WRITE_LOCAL],
+}
 
 
 class DevOpsAPIError(Exception):
@@ -70,7 +103,7 @@ def _get_json(url: str, timeout: int = 40) -> dict:
 @server.list_tools()
 async def list_tools() -> list[Tool]:
     """List available tools."""
-    return [
+    tools = [
         Tool(
             name="list_projects",
             description="Get list of all Azure DevOps projects",
@@ -309,6 +342,17 @@ async def list_tools() -> list[Tool]:
             }
         )
     ]
+
+    # Add permissions metadata to each tool
+    for tool in tools:
+        # Get permissions for this tool from TOOL_PERMISSIONS dict
+        perms = TOOL_PERMISSIONS.get(tool.name, [PermissionCategory.READ_REMOTE])
+        perm_strings = [p.value if isinstance(p, PermissionCategory) else p for p in perms]
+
+        # Set permissions via our custom Tool class
+        tool.permissions = get_tool_permission_metadata(tool.name, "devops", perm_strings)
+
+    return tools
 
 
 @server.call_tool()

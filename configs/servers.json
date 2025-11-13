@@ -1,5 +1,35 @@
 {
+    "permissions": {
+        "global_defaults": {
+            "EXECUTE_AI": false,
+            "EXECUTE_CODE": false,
+            "READ_REMOTE": false,
+            "WRITE_LOCAL": true,
+            "WRITE_REMOTE": false
+        }
+    },
     "servers": [
+        {
+            "arguments": [
+                "run",
+                "--rm",
+                "-i",
+                "--env-file",
+                "/home/laptop/MEGA/development/chatns/chatnsbot-standalone/atlassian-mcp.env",
+                "ghcr.io/sooperset/mcp-atlassian:latest"
+            ],
+            "autostart": false,
+            "command": "docker",
+            "description": "Atlassian MCP Server (Community) - Full Jira + Confluence integration with 40+ tools",
+            "env": {
+            },
+            "githubRepo": "https://github.com/sooperset/mcp-atlassian",
+            "healthCheckInterval": 30000,
+            "name": "Atlassian",
+            "port": 8771,
+            "type": "docker",
+            "workingDir": "/home/laptop/MEGA/development/chatns/chatnsbot-standalone"
+        },
         {
             "arguments": [
                 "mcp_servers/devops_server.py"
@@ -48,26 +78,6 @@
             "port": 8770,
             "type": "python",
             "workingDir": "/home/laptop/MEGA/development/chatns/mcp-manager"
-        },
-        {
-            "arguments": [
-                "run",
-                "--rm",
-                "-i",
-                "--env-file",
-                "/home/laptop/MEGA/development/chatns/chatnsbot-standalone/atlassian-mcp.env",
-                "ghcr.io/sooperset/mcp-atlassian:latest"
-            ],
-            "autostart": false,
-            "command": "docker",
-            "description": "Atlassian MCP Server (Community) - Full Jira + Confluence integration with 40+ tools",
-            "env": {},
-            "githubRepo": "https://github.com/sooperset/mcp-atlassian",
-            "healthCheckInterval": 30000,
-            "name": "Atlassian",
-            "port": 8771,
-            "type": "docker",
-            "workingDir": "/home/laptop/MEGA/development/chatns/chatnsbot-standalone"
         }
     ],
     "version": "1.0"

@@ -1,4 +1,5 @@
 #include "MCPServerInstance.h"
+#include "MCPServerManager.h"
 #include <QDebug>
 #include <QTcpSocket>
 #include <QJsonArray>
@@ -19,6 +20,7 @@ MCPServerInstance::MCPServerInstance(const QJsonObject& config, QObject* parent)
     , m_intentionalStop(false)
     , m_initialized(false)
     , m_pendingToolsRefresh(false)
+    , m_manager(nullptr)
 {
     // Parse configuration
     m_name = config["name"].toString("Unnamed Server");
@@ -38,6 +40,20 @@ MCPServerInstance::MCPServerInstance(const QJsonObject& config, QObject* parent)
 
     // Parse environment
     m_environment = config["env"].toObject();
+
+    // Parse server-specific permission overrides (explicit only, not defaults)
+    // If a permission is not in the config, it will inherit from global defaults
+    m_permissions.clear();
+    if (config.contains("permissions")) {
+        QJsonObject perms = config["permissions"].toObject();
+        if (perms.contains("READ_REMOTE")) m_permissions[READ_REMOTE] = perms["READ_REMOTE"].toBool();
+        if (perms.contains("WRITE_REMOTE")) m_permissions[WRITE_REMOTE] = perms["WRITE_REMOTE"].toBool();
+        if (perms.contains("WRITE_LOCAL")) m_permissions[WRITE_LOCAL] = perms["WRITE_LOCAL"].toBool();
+        if (perms.contains("EXECUTE_AI")) m_permissions[EXECUTE_AI] = perms["EXECUTE_AI"].toBool();
+        if (perms.contains("EXECUTE_CODE")) m_permissions[EXECUTE_CODE] = perms["EXECUTE_CODE"].toBool();
+    }
+
+    qDebug() << "Explicit permission overrides for" << m_name << ":" << m_permissions.size() << "overrides";
 
     // Connect process signals
     connect(m_process, &QProcess::started, this, &MCPServerInstance::onProcessStarted);
@@ -497,6 +513,17 @@ void MCPServerInstance::parseToolsListResponse(const QJsonObject& response) {
         tool.enabled = true;  // Enable by default
         tool.schema = toolObj["inputSchema"].toObject();
 
+        // Parse permission metadata if available
+        if (toolObj.contains("permissions")) {
+            QJsonObject perms = toolObj["permissions"].toObject();
+            if (perms.contains("categories")) {
+                QJsonArray cats = perms["categories"].toArray();
+                for (const QJsonValue& cat : cats) {
+                    tool.permissions.append(cat.toString());
+                }
+            }
+        }
+
         m_tools.append(tool);
         qDebug() << "  - Tool:" << tool.name << "-" << tool.description;
     }
@@ -536,4 +563,61 @@ QProcessEnvironment MCPServerInstance::buildEnvironment() const {
     }
 
     return env;
+}
+
+// Permission management methods
+bool MCPServerInstance::hasPermission(PermissionCategory category) const {
+    // Check if there's an explicit override for this server
+    if (m_permissions.contains(category)) {
+        return m_permissions[category];
+    }
+
+    // Otherwise, fall back to global default from manager
+    if (m_manager) {
+        return m_manager->getGlobalPermission(category);
+    }
+
+    // Ultimate fallback: safe default (only READ_REMOTE allowed)
+    return category == READ_REMOTE;
+}
+
+void MCPServerInstance::setPermission(PermissionCategory category, bool enabled) {
+    m_permissions[category] = enabled;
+    qDebug() << "Permission" << category << "set to" << enabled << "for" << m_name << "(explicit override)";
+}
+
+void MCPServerInstance::clearPermission(PermissionCategory category) {
+    m_permissions.remove(category);
+    qDebug() << "Permission" << category << "cleared for" << m_name << "(will use global default)";
+}
+
+bool MCPServerInstance::hasExplicitPermission(PermissionCategory category) const {
+    return m_permissions.contains(category);
+}
+
+bool MCPServerInstance::checkToolPermissions(const QString& toolName) const {
+    // Find the tool
+    for (const ToolInfo& tool : m_tools) {
+        if (tool.name == toolName) {
+            // Check if all required permissions are granted
+            for (const QString& permStr : tool.permissions) {
+                PermissionCategory perm = READ_REMOTE;  // default
+
+                if (permStr == "READ_REMOTE") perm = READ_REMOTE;
+                else if (permStr == "WRITE_REMOTE") perm = WRITE_REMOTE;
+                else if (permStr == "WRITE_LOCAL") perm = WRITE_LOCAL;
+                else if (permStr == "EXECUTE_AI") perm = EXECUTE_AI;
+                else if (permStr == "EXECUTE_CODE") perm = EXECUTE_CODE;
+
+                if (!hasPermission(perm)) {
+                    qWarning() << "Tool" << toolName << "blocked: missing permission" << permStr;
+                    return false;
+                }
+            }
+            return true;
+        }
+    }
+
+    // Tool not found, allow by default (will be caught by tool existence check elsewhere)
+    return true;
 }

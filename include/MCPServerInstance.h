@@ -30,6 +30,9 @@ public:
     explicit MCPServerInstance(const QJsonObject& config, QObject* parent = nullptr);
     ~MCPServerInstance();
 
+    // Set the server manager (needed for global permission fallback)
+    void setManager(class MCPServerManager* manager) { m_manager = manager; }
+
     // Lifecycle
     bool start();
     void stop();
@@ -53,11 +56,29 @@ public:
         QString description;
         bool enabled;
         QJsonObject schema;
+        QStringList permissions;  // Permission categories this tool requires
     };
     QList<ToolInfo> availableTools() const { return m_tools; }
     bool isToolEnabled(const QString& toolName) const;
     void setToolEnabled(const QString& toolName, bool enabled);
     void refreshTools(); // Query tools from running server
+
+    // Permission management
+    enum PermissionCategory {
+        READ_REMOTE,
+        WRITE_REMOTE,
+        WRITE_LOCAL,
+        EXECUTE_AI,
+        EXECUTE_CODE
+    };
+    Q_ENUM(PermissionCategory)
+
+    bool hasPermission(PermissionCategory category) const;
+    void setPermission(PermissionCategory category, bool enabled);
+    void clearPermission(PermissionCategory category); // Remove explicit override
+    bool hasExplicitPermission(PermissionCategory category) const; // Check if it's an explicit override
+    QMap<PermissionCategory, bool> explicitPermissions() const { return m_permissions; }
+    bool checkToolPermissions(const QString& toolName) const;
 
     // Process info
     qint64 pid() const;
@@ -125,4 +146,8 @@ private:
     QList<ToolInfo> m_tools;  // Available tools from this server
     bool m_initialized;  // Track if MCP initialization handshake is complete
     bool m_pendingToolsRefresh;  // Track if we need to refresh tools after initialization
+
+    // Permissions
+    QMap<PermissionCategory, bool> m_permissions;  // Explicit permission overrides for this server
+    class MCPServerManager* m_manager;  // Pointer to manager for global permission fallback
 };

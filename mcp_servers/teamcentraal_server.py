@@ -17,6 +17,11 @@ import os
 import requests
 from typing import Any, Dict, Optional, List
 from urllib.parse import quote
+from pathlib import Path
+
+# Import permission system
+sys.path.insert(0, str(Path(__file__).parent))
+from shared.permissions import PermissionCategory, get_tool_permission_metadata
 
 # Setup logging to stderr (stdout is used for MCP protocol)
 logging.basicConfig(
@@ -155,10 +160,12 @@ class TeamCentraalMCPServer:
         else:
             logger.warning("TeamCentraal credentials not configured")
 
-        # Define available tools
+        # Define available tools with permission metadata
+        self.server_type = "teamcentraal"
         self.tools = {
             "list_teams": {
                 "description": "Haal alle teams op uit TeamCentraal. Ondersteunt filtering, selectie en paginering.",
+                "permissions": get_tool_permission_metadata("list_teams", self.server_type, [PermissionCategory.READ_REMOTE.value]),
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -324,14 +331,15 @@ class TeamCentraalMCPServer:
         }
 
     def handle_tools_list(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """List available tools."""
+        """List available tools with permission metadata."""
         logger.info("Listing tools")
         return {
             "tools": [
                 {
                     "name": name,
                     "description": tool["description"],
-                    "inputSchema": tool["inputSchema"]
+                    "inputSchema": tool["inputSchema"],
+                    "permissions": tool.get("permissions", get_tool_permission_metadata(name, self.server_type))
                 }
                 for name, tool in self.tools.items()
             ]

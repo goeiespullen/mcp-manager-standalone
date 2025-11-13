@@ -331,6 +331,13 @@ void MCPGateway::handleToolCall(QTcpSocket* client, const QJsonValue& id, const 
         return;
     }
 
+    // Check tool permissions
+    if (server && !server->checkToolPermissions(toolName)) {
+        sendError(client, id, -32003, QString("Tool '%1' blocked: insufficient permissions for server '%2'").arg(toolName, serverType));
+        LOG_WARNING(Logger::Gateway, QString("Tool call blocked: insufficient permissions for tool %1 on server %2").arg(toolName, serverType));
+        return;
+    }
+
     // Log tool arguments for debugging
     QJsonDocument argsDoc(params["arguments"].toObject());
     LOG_DEBUG(Logger::Gateway, QString("Tool call arguments: %1").arg(QString(argsDoc.toJson(QJsonDocument::Compact))));
