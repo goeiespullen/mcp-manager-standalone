@@ -524,8 +524,63 @@ void MCPServerInstance::parseToolsListResponse(const QJsonObject& response) {
             }
         }
 
+        // Auto-detect permissions if not specified by the server
+        if (tool.permissions.isEmpty()) {
+            QString toolName = tool.name.toLower();
+            QString toolDesc = tool.description.toLower();
+
+            // Write operations (keywords in tool name or description)
+            if (toolName.contains("create") || toolName.contains("update") ||
+                toolName.contains("delete") || toolName.contains("add") ||
+                toolName.contains("transition") || toolName.contains("link") ||
+                toolName.contains("modify") || toolName.contains("set") ||
+                toolName.contains("post") || toolName.contains("put") ||
+                toolDesc.contains("create") || toolDesc.contains("update") ||
+                toolDesc.contains("delete") || toolDesc.contains("modify")) {
+                tool.permissions.append("WRITE_REMOTE");
+            }
+
+            // Download/export/save operations
+            if (toolName.contains("download") || toolName.contains("export") ||
+                toolName.contains("save") || toolName.contains("dump") ||
+                toolDesc.contains("download") || toolDesc.contains("export")) {
+                tool.permissions.append("WRITE_LOCAL");
+            }
+
+            // AI/LLM operations
+            if (toolName.contains("chat") || toolName.contains("completion") ||
+                toolName.contains("generate") || toolName.contains("ai") ||
+                toolName.contains("gpt") || toolName.contains("llm") ||
+                toolDesc.contains("ai model") || toolDesc.contains("llm")) {
+                tool.permissions.append("EXECUTE_AI");
+            }
+
+            // Code execution operations
+            if (toolName.contains("execute") || toolName.contains("run") ||
+                toolName.contains("script") || toolName.contains("build") ||
+                toolName.contains("compile") || toolDesc.contains("execute")) {
+                tool.permissions.append("EXECUTE_CODE");
+            }
+
+            // Batch operations (might be expensive)
+            if (toolName.contains("batch")) {
+                if (!tool.permissions.contains("WRITE_REMOTE")) {
+                    tool.permissions.append("WRITE_REMOTE");
+                }
+            }
+
+            // All tools that don't write read from remote (default for MCP servers)
+            if (!tool.permissions.contains("WRITE_REMOTE") &&
+                !tool.permissions.contains("WRITE_LOCAL") &&
+                !tool.permissions.contains("EXECUTE_AI") &&
+                !tool.permissions.contains("EXECUTE_CODE")) {
+                tool.permissions.append("READ_REMOTE");
+            }
+        }
+
         m_tools.append(tool);
-        qDebug() << "  - Tool:" << tool.name << "-" << tool.description;
+        qDebug() << "  - Tool:" << tool.name << "-" << tool.description
+                 << "Permissions:" << tool.permissions.join(", ");
     }
 
     qDebug() << "Loaded" << m_tools.size() << "tools for" << m_name;

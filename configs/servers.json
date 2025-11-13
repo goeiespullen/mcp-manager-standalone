@@ -3,8 +3,8 @@
         "global_defaults": {
             "EXECUTE_AI": false,
             "EXECUTE_CODE": false,
-            "READ_REMOTE": false,
-            "WRITE_LOCAL": true,
+            "READ_REMOTE": true,
+            "WRITE_LOCAL": false,
             "WRITE_REMOTE": false
         }
     },
@@ -26,6 +26,9 @@
             "githubRepo": "https://github.com/sooperset/mcp-atlassian",
             "healthCheckInterval": 30000,
             "name": "Atlassian",
+            "permissions": {
+                "WRITE_LOCAL": false
+            },
             "port": 8771,
             "type": "docker",
             "workingDir": "/home/laptop/MEGA/development/chatns/chatnsbot-standalone"
@@ -43,6 +46,9 @@
             "githubRepo": "https://github.com/microsoft/azure-devops-mcp",
             "healthCheckInterval": 30000,
             "name": "Azure DevOps",
+            "permissions": {
+                "WRITE_LOCAL": true
+            },
             "port": 8765,
             "type": "python",
             "workingDir": "/home/laptop/MEGA/development/chatns/mcp-manager"
@@ -58,6 +64,10 @@
             },
             "healthCheckInterval": 30000,
             "name": "ChatNS",
+            "permissions": {
+                "EXECUTE_AI": true,
+                "WRITE_LOCAL": false
+            },
             "port": 8767,
             "type": "python",
             "workingDir": "/home/laptop/MEGA/development/chatns/mcp-manager"
@@ -75,6 +85,9 @@
             "githubRepo": "https://github.com/ns-topaas/teamcentraal-mcp",
             "healthCheckInterval": 30000,
             "name": "TeamCentraal",
+            "permissions": {
+                "WRITE_LOCAL": false
+            },
             "port": 8770,
             "type": "python",
             "workingDir": "/home/laptop/MEGA/development/chatns/mcp-manager"

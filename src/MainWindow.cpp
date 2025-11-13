@@ -120,8 +120,7 @@ void MainWindow::setupUI() {
     // Tab widget
     m_tabWidget = new QTabWidget();
     m_tabWidget->addTab(createServersTab(), "Servers");
-    m_tabWidget->addTab(createPermissionsTab(), "🔒 Permissions");
-    m_tabWidget->addTab(createToolsBrowserTab(), "Tools Browser");
+    m_tabWidget->addTab(createToolsAndPermissionsTab(), "🔧 Tools & Permissions");
     m_tabWidget->addTab(createApiTesterTab(), "API Tester");
     m_tabWidget->addTab(createGatewayTab(), "Gateway (Port 8700)");
     m_tabWidget->addTab(createLogsTab(), "Logs");
@@ -920,16 +919,16 @@ QWidget* MainWindow::createPermissionsTab() {
 
     layout->addWidget(m_permissionsTable);
 
-    // Change Log Section
+    // Change Log Section (OLD TAB - NOT USED)
     QGroupBox* changeLogGroup = new QGroupBox("📝 Change Log - Unsaved Changes");
     QVBoxLayout* changeLogLayout = new QVBoxLayout(changeLogGroup);
 
-    m_changeLogDisplay = new QTextEdit();
-    m_changeLogDisplay->setReadOnly(true);
-    m_changeLogDisplay->setMaximumHeight(120);
-    m_changeLogDisplay->setPlaceholderText("No unsaved changes");
-    m_changeLogDisplay->setStyleSheet("QTextEdit { background-color: #F5F5F5; border: 1px solid #CCCCCC; }");
-    changeLogLayout->addWidget(m_changeLogDisplay);
+    QTextEdit* changeLogDisplay = new QTextEdit();
+    changeLogDisplay->setReadOnly(true);
+    changeLogDisplay->setMaximumHeight(120);
+    changeLogDisplay->setPlaceholderText("No unsaved changes");
+    changeLogDisplay->setStyleSheet("QTextEdit { background-color: #F5F5F5; border: 1px solid #CCCCCC; }");
+    changeLogLayout->addWidget(changeLogDisplay);
 
     layout->addWidget(changeLogGroup);
 
@@ -948,18 +947,396 @@ QWidget* MainWindow::createPermissionsTab() {
     buttonLayout->addStretch();
     layout->addLayout(buttonLayout);
 
-    // Change History Section (permanent log with timestamps)
+    // Change History Section (OLD TAB - NOT USED)
     QGroupBox* historyGroup = new QGroupBox("📜 Change History (Saved Changes)");
     QVBoxLayout* historyLayout = new QVBoxLayout(historyGroup);
 
-    m_changeHistoryDisplay = new QTextEdit();
-    m_changeHistoryDisplay->setReadOnly(true);
-    m_changeHistoryDisplay->setMaximumHeight(150);
-    m_changeHistoryDisplay->setPlaceholderText("No changes saved yet");
-    m_changeHistoryDisplay->setStyleSheet("QTextEdit { background-color: #F9F9F9; border: 1px solid #AAAAAA; font-family: monospace; }");
-    historyLayout->addWidget(m_changeHistoryDisplay);
+    QTextEdit* changeHistoryDisplay = new QTextEdit();
+    changeHistoryDisplay->setReadOnly(true);
+    changeHistoryDisplay->setMaximumHeight(150);
+    changeHistoryDisplay->setPlaceholderText("No changes saved yet");
+    changeHistoryDisplay->setStyleSheet("QTextEdit { background-color: #F9F9F9; border: 1px solid #AAAAAA; font-family: monospace; }");
+    historyLayout->addWidget(changeHistoryDisplay);
 
     layout->addWidget(historyGroup);
+
+    layout->addStretch();
+
+    return widget;
+}
+
+QWidget* MainWindow::createToolsAndPermissionsTab() {
+    QWidget* widget = new QWidget();
+    QVBoxLayout* layout = new QVBoxLayout(widget);
+    layout->setSpacing(10);
+
+    // Title
+    QLabel* titleLabel = new QLabel("<h2>🔧 Tools & Permissions Management</h2>");
+    layout->addWidget(titleLabel);
+
+    QLabel* descLabel = new QLabel(
+        "<p>View available tools per server and manage their execution permissions.</p>");
+    descLabel->setWordWrap(true);
+    layout->addWidget(descLabel);
+
+    // ========== SECTION 1: TOOLS BROWSER ==========
+    QGroupBox* toolsGroup = new QGroupBox("📋 Available Tools per Server");
+    QVBoxLayout* toolsLayout = new QVBoxLayout(toolsGroup);
+
+    // Server selector and refresh button
+    QHBoxLayout* toolsToolbarLayout = new QHBoxLayout();
+    QLabel* serverLabel = new QLabel("<b>Select Server:</b>");
+    toolsToolbarLayout->addWidget(serverLabel);
+
+    m_toolsServerList = new QListWidget();
+    m_toolsServerList->setMaximumHeight(100);
+    m_toolsServerList->setFlow(QListView::LeftToRight);
+    m_toolsServerList->setResizeMode(QListView::Adjust);
+    m_toolsServerList->setWrapping(true);
+
+    // Populate server list
+    QList<MCPServerInstance*> servers = m_manager->allServers();
+    for (MCPServerInstance* server : servers) {
+        QListWidgetItem* item = new QListWidgetItem(server->name());
+        if (server->isRunning()) {
+            item->setIcon(QIcon::fromTheme("dialog-ok"));
+            item->setForeground(QColor(0, 128, 0));
+        } else {
+            item->setIcon(QIcon::fromTheme("dialog-cancel"));
+            item->setForeground(QColor(128, 128, 128));
+        }
+        m_toolsServerList->addItem(item);
+    }
+    toolsLayout->addWidget(m_toolsServerList);
+
+    toolsToolbarLayout->addStretch();
+
+    m_refreshToolsButton = new QPushButton("🔄 Refresh Tools");
+    m_refreshToolsButton->setEnabled(false);
+    connect(m_refreshToolsButton, &QPushButton::clicked, [this]() {
+        QListWidgetItem* item = m_toolsServerList->currentItem();
+        if (!item) return;
+
+        QString serverName = item->text();
+        MCPServerInstance* server = m_manager->getServer(serverName);
+        if (!server || !server->isRunning()) {
+            QMessageBox::warning(this, "Error", "Server must be running to refresh tools");
+            return;
+        }
+
+        // Show loading message
+        m_toolDetailsDisplay->setPlainText(QString("Querying tools from %1...\nPlease wait...").arg(serverName));
+        m_toolsTable->setRowCount(0);
+
+        // Create timeout timer
+        QTimer* timeoutTimer = new QTimer(this);
+        timeoutTimer->setSingleShot(true);
+
+        // Connect to toolsChanged signal with single-shot connection
+        QMetaObject::Connection* conn = new QMetaObject::Connection();
+        *conn = connect(server, &MCPServerInstance::toolsChanged, [this, server, conn, timeoutTimer]() {
+            timeoutTimer->stop();
+            timeoutTimer->deleteLater();
+            QObject::disconnect(*conn);
+            delete conn;
+
+            // Populate tools table
+            m_toolsTable->setRowCount(0);
+            QList<MCPServerInstance::ToolInfo> tools = server->availableTools();
+
+            for (const MCPServerInstance::ToolInfo& tool : tools) {
+                int row = m_toolsTable->rowCount();
+                m_toolsTable->insertRow(row);
+
+                // Check if server has all required permissions
+                bool hasAllPermissions = true;
+                QStringList missingPermissions;
+                for (const QString& permStr : tool.permissions) {
+                    MCPServerInstance::PermissionCategory perm;
+                    if (permStr == "READ_REMOTE") perm = MCPServerInstance::READ_REMOTE;
+                    else if (permStr == "WRITE_REMOTE") perm = MCPServerInstance::WRITE_REMOTE;
+                    else if (permStr == "WRITE_LOCAL") perm = MCPServerInstance::WRITE_LOCAL;
+                    else if (permStr == "EXECUTE_AI") perm = MCPServerInstance::EXECUTE_AI;
+                    else if (permStr == "EXECUTE_CODE") perm = MCPServerInstance::EXECUTE_CODE;
+                    else continue;
+
+                    if (!server->hasPermission(perm)) {
+                        hasAllPermissions = false;
+                        missingPermissions.append(permStr);
+                    }
+                }
+
+                QTableWidgetItem* nameItem = new QTableWidgetItem(tool.name);
+                nameItem->setFlags(nameItem->flags() & ~Qt::ItemIsEditable);
+                m_toolsTable->setItem(row, 0, nameItem);
+
+                QTableWidgetItem* descItem = new QTableWidgetItem(tool.description);
+                descItem->setFlags(descItem->flags() & ~Qt::ItemIsEditable);
+                m_toolsTable->setItem(row, 1, descItem);
+
+                QString permsText = tool.permissions.isEmpty() ? "None" : tool.permissions.join(", ");
+                QTableWidgetItem* permsItem = new QTableWidgetItem(permsText);
+                permsItem->setFlags(permsItem->flags() & ~Qt::ItemIsEditable);
+                m_toolsTable->setItem(row, 2, permsItem);
+
+                QTableWidgetItem* accessItem = new QTableWidgetItem(hasAllPermissions ? "✅ Allowed" : "❌ Blocked");
+                accessItem->setFlags(accessItem->flags() & ~Qt::ItemIsEditable);
+                accessItem->setForeground(hasAllPermissions ? QColor(0, 128, 0) : QColor(180, 0, 0));
+                m_toolsTable->setItem(row, 3, accessItem);
+
+                QTableWidgetItem* enabledItem = new QTableWidgetItem(tool.enabled ? "✅ Enabled" : "❌ Disabled");
+                enabledItem->setFlags(enabledItem->flags() & ~Qt::ItemIsEditable);
+                enabledItem->setForeground(tool.enabled ? QColor(0, 128, 0) : QColor(180, 0, 0));
+                m_toolsTable->setItem(row, 4, enabledItem);
+
+                QColor bgColor = hasAllPermissions ? QColor(230, 255, 230) : QColor(255, 230, 230);
+                for (int col = 0; col < 5; col++) {
+                    m_toolsTable->item(row, col)->setBackground(bgColor);
+                }
+
+                QString tooltip = QString("Tool: %1\n").arg(tool.name);
+                if (hasAllPermissions) {
+                    tooltip += "✅ All required permissions granted\n";
+                    if (!tool.permissions.isEmpty()) {
+                        tooltip += "Permissions: " + tool.permissions.join(", ");
+                    }
+                } else {
+                    tooltip += "❌ Missing permissions:\n";
+                    for (const QString& perm : missingPermissions) {
+                        tooltip += "  - " + perm + "\n";
+                    }
+                    tooltip += "\nAdjust permissions below to grant access.";
+                }
+                for (int col = 0; col < 5; col++) {
+                    m_toolsTable->item(row, col)->setToolTip(tooltip);
+                }
+            }
+
+            if (tools.isEmpty()) {
+                m_toolDetailsDisplay->setPlainText("No tools found. Make sure the server is running and supports the MCP tools/list method.");
+            } else {
+                m_toolDetailsDisplay->setPlainText(QString("Successfully loaded %1 tool(s) from %2.\n\nSelect a tool to view details.")
+                    .arg(tools.size()).arg(server->name()));
+            }
+        });
+
+        connect(timeoutTimer, &QTimer::timeout, [this, conn, serverName]() {
+            QObject::disconnect(*conn);
+            delete conn;
+            m_toolDetailsDisplay->setPlainText(QString(
+                "⚠️ Timeout querying tools from %1\n\n"
+                "The server did not respond within 5 seconds.\n\n"
+                "Possible causes:\n"
+                "• Server is still initializing\n"
+                "• Server doesn't support tools/list method\n"
+                "• Server is not responding to stdin\n\n"
+                "Try again in a few seconds, or check the Logs tab for errors."
+            ).arg(serverName));
+        });
+
+        timeoutTimer->start(5000);
+        server->refreshTools();
+    });
+    toolsToolbarLayout->addWidget(m_refreshToolsButton);
+    toolsLayout->addLayout(toolsToolbarLayout);
+
+    // Tools table
+    m_toolsTable = new QTableWidget();
+    m_toolsTable->setColumnCount(5);
+    m_toolsTable->setHorizontalHeaderLabels({"Tool Name", "Description", "Required Permissions", "Access Status", "Enabled"});
+    m_toolsTable->horizontalHeader()->setStretchLastSection(false);
+    m_toolsTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    m_toolsTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    m_toolsTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    m_toolsTable->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+    m_toolsTable->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
+    m_toolsTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_toolsTable->setMaximumHeight(200);
+    toolsLayout->addWidget(m_toolsTable);
+
+    // Tool details display (small)
+    m_toolDetailsDisplay = new QTextEdit();
+    m_toolDetailsDisplay->setReadOnly(true);
+    m_toolDetailsDisplay->setMaximumHeight(60);
+    m_toolDetailsDisplay->setPlainText("Select a server and click 'Refresh Tools' to see available tools.");
+    m_toolDetailsDisplay->setStyleSheet("QTextEdit { background-color: #F5F5F5; font-size: 11px; }");
+    toolsLayout->addWidget(m_toolDetailsDisplay);
+
+    // Connect server selection
+    connect(m_toolsServerList, &QListWidget::currentItemChanged, [this](QListWidgetItem* current, QListWidgetItem*) {
+        if (current) {
+            QString serverName = current->text();
+            MCPServerInstance* server = m_manager->getServer(serverName);
+            m_refreshToolsButton->setEnabled(server && server->isRunning());
+            m_toolsTable->setRowCount(0);
+            m_toolDetailsDisplay->setPlainText(
+                server && server->isRunning()
+                    ? QString("Server '%1' is running. Click 'Refresh Tools' to load available tools.").arg(serverName)
+                    : QString("Server '%1' is not running. Start it first to see available tools.").arg(serverName)
+            );
+        } else {
+            m_refreshToolsButton->setEnabled(false);
+        }
+    });
+
+    layout->addWidget(toolsGroup);
+
+    // ========== SECTION 2: GLOBAL PERMISSIONS ==========
+    QGroupBox* globalGroup = new QGroupBox("🌍 Global Default Permissions (applies to all servers unless overridden)");
+    QHBoxLayout* globalLayout = new QHBoxLayout(globalGroup);
+
+    QStringList permNames = {"READ_REMOTE", "WRITE_REMOTE", "WRITE_LOCAL", "EXECUTE_AI", "EXECUTE_CODE"};
+    QMap<MCPServerInstance::PermissionCategory, bool> globalPerms = m_manager->globalPermissions();
+
+    for (int i = 0; i < permNames.size(); i++) {
+        QCheckBox* cb = new QCheckBox(permNames[i]);
+        auto category = static_cast<MCPServerInstance::PermissionCategory>(i);
+        cb->setChecked(globalPerms.value(category, false));
+        m_globalPermissionCheckboxes[i] = cb;
+        globalLayout->addWidget(cb);
+
+        connect(cb, &QCheckBox::toggled, this, [this, i](bool checked) {
+            onGlobalPermissionChanged(i, checked);
+        });
+    }
+
+    layout->addWidget(globalGroup);
+
+    // ========== SECTION 3: PER-SERVER PERMISSIONS ==========
+    QGroupBox* serverPermsGroup = new QGroupBox("🖥️ Per-Server Permission Overrides");
+    QVBoxLayout* serverPermsLayout = new QVBoxLayout(serverPermsGroup);
+
+    m_permissionsTable = new QTableWidget();
+    m_permissionsTable->setColumnCount(7);
+    m_permissionsTable->setHorizontalHeaderLabels(
+        {"Server", "READ_REMOTE", "WRITE_REMOTE", "WRITE_LOCAL", "EXECUTE_AI", "EXECUTE_CODE", "Actions"});
+
+    m_permissionsTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    for (int col = 1; col <= 5; col++) {
+        m_permissionsTable->horizontalHeader()->setSectionResizeMode(col, QHeaderView::Fixed);
+        m_permissionsTable->setColumnWidth(col, 140);
+    }
+    m_permissionsTable->horizontalHeader()->setSectionResizeMode(6, QHeaderView::Fixed);
+    m_permissionsTable->setColumnWidth(6, 120);
+
+    // Populate table with servers
+    m_permissionsTable->setRowCount(servers.size());
+
+    for (int row = 0; row < servers.size(); row++) {
+        MCPServerInstance* server = servers[row];
+
+        QTableWidgetItem* nameItem = new QTableWidgetItem(server->name());
+        nameItem->setFlags(nameItem->flags() & ~Qt::ItemIsEditable);
+        m_permissionsTable->setItem(row, 0, nameItem);
+
+        for (int col = 1; col <= 5; col++) {
+            int category = col - 1;
+            auto permCategory = static_cast<MCPServerInstance::PermissionCategory>(category);
+
+            QCheckBox* cb = new QCheckBox();
+            bool hasPermission = server->hasPermission(permCategory);
+            bool isExplicit = server->hasExplicitPermission(permCategory);
+
+            cb->setChecked(hasPermission);
+
+            QWidget* container = new QWidget();
+            QHBoxLayout* cellLayout = new QHBoxLayout(container);
+            cellLayout->addWidget(cb);
+            cellLayout->setAlignment(Qt::AlignCenter);
+            cellLayout->setContentsMargins(0, 0, 0, 0);
+
+            if (!isExplicit) {
+                container->setStyleSheet("QWidget { background-color: #E8F4F8; }");
+                cb->setToolTip("🔄 Inheriting from global default. Click to create explicit override.");
+            } else {
+                container->setStyleSheet("QWidget { background-color: #FFF9E6; }");
+                cb->setToolTip("✏️ Explicit override for this server. Uses custom setting instead of global default.");
+            }
+
+            m_permissionsTable->setCellWidget(row, col, container);
+
+            QString serverName = server->name();
+            connect(cb, &QCheckBox::toggled, this, [this, serverName, category](bool checked) {
+                onServerPermissionChanged(serverName, category, checked);
+            });
+        }
+
+        QPushButton* resetBtn = new QPushButton("🔄 Reset");
+        resetBtn->setToolTip("Remove all explicit overrides for this server and use global defaults");
+        resetBtn->setMaximumWidth(100);
+
+        QWidget* btnContainer = new QWidget();
+        QHBoxLayout* btnLayout = new QHBoxLayout(btnContainer);
+        btnLayout->addWidget(resetBtn);
+        btnLayout->setAlignment(Qt::AlignCenter);
+        btnLayout->setContentsMargins(2, 2, 2, 2);
+
+        m_permissionsTable->setCellWidget(row, 6, btnContainer);
+
+        QString serverName = server->name();
+        connect(resetBtn, &QPushButton::clicked, this, [this, serverName, row]() {
+            onResetServerPermissions(serverName, row);
+        });
+    }
+
+    m_permissionsTable->setMaximumHeight(250);
+    serverPermsLayout->addWidget(m_permissionsTable);
+
+    layout->addWidget(serverPermsGroup);
+
+    // Action buttons
+    QHBoxLayout* buttonLayout = new QHBoxLayout();
+
+    QPushButton* saveButton = new QPushButton("💾 Save Permissions");
+    connect(saveButton, &QPushButton::clicked, this, &MainWindow::onSaveConfigClicked);
+    buttonLayout->addWidget(saveButton);
+
+    m_discardButton = new QPushButton("↩️ Discard All Changes");
+    m_discardButton->setEnabled(false);
+    connect(m_discardButton, &QPushButton::clicked, this, &MainWindow::onDiscardAllChanges);
+    buttonLayout->addWidget(m_discardButton);
+
+    QPushButton* viewHistoryButton = new QPushButton("📜 View Change History...");
+    connect(viewHistoryButton, &QPushButton::clicked, this, [this]() {
+        // Create non-modal window
+        QDialog* dialog = new QDialog(this, Qt::Window);
+        dialog->setWindowTitle("Permission Change History");
+        dialog->resize(700, 500);
+        dialog->setAttribute(Qt::WA_DeleteOnClose);  // Auto-cleanup when closed
+
+        QVBoxLayout* dialogLayout = new QVBoxLayout(dialog);
+
+        // Info label
+        QLabel* infoLabel = new QLabel(
+            "<b>Change History</b><br>"
+            "Permanent log of all saved permission changes with timestamps.");
+        infoLabel->setWordWrap(true);
+        infoLabel->setStyleSheet("QLabel { padding: 10px; background-color: #E8F4F8; border-radius: 5px; }");
+        dialogLayout->addWidget(infoLabel);
+
+        // History display
+        QTextEdit* historyDisplay = new QTextEdit();
+        historyDisplay->setReadOnly(true);
+        historyDisplay->setPlainText(m_changeHistoryEntries.isEmpty()
+            ? "No changes saved yet.\n\nPermission changes will appear here after you save them."
+            : m_changeHistoryEntries.join("\n"));
+        historyDisplay->setStyleSheet("QTextEdit { background-color: #F9F9F9; border: 1px solid #AAAAAA; font-family: monospace; font-size: 11px; }");
+        dialogLayout->addWidget(historyDisplay);
+
+        // Close button
+        QHBoxLayout* buttonLayout = new QHBoxLayout();
+        buttonLayout->addStretch();
+        QPushButton* closeButton = new QPushButton("Close");
+        connect(closeButton, &QPushButton::clicked, dialog, &QDialog::close);
+        buttonLayout->addWidget(closeButton);
+        dialogLayout->addLayout(buttonLayout);
+
+        dialog->show();  // Non-modal: allows interaction with main window
+    });
+    buttonLayout->addWidget(viewHistoryButton);
+
+    buttonLayout->addStretch();
+    layout->addLayout(buttonLayout);
 
     layout->addStretch();
 
@@ -1696,16 +2073,11 @@ void MainWindow::onSaveConfigClicked() {
                 m_changeHistoryEntries.append(entry);
             }
 
-            // Update history display (limit to last 100 entries)
+            // Limit history to last 100 entries
             if (m_changeHistoryEntries.size() > 100) {
                 m_changeHistoryEntries = m_changeHistoryEntries.mid(m_changeHistoryEntries.size() - 100);
             }
-            m_changeHistoryDisplay->setPlainText(m_changeHistoryEntries.join("\n"));
-
-            // Scroll to bottom to show most recent
-            QTextCursor cursor = m_changeHistoryDisplay->textCursor();
-            cursor.movePosition(QTextCursor::End);
-            m_changeHistoryDisplay->setTextCursor(cursor);
+            // Note: Change history is now shown in a dialog window via "View Change History" button
         }
 
         // Clear unsaved change log after successful save
@@ -2936,13 +3308,11 @@ void MainWindow::onResetServerPermissions(const QString& serverName, int row) {
 }
 
 void MainWindow::updateChangeLog() {
+    // Only update the discard button state
+    // The change log display is no longer shown inline in the new combined tab
     if (m_changeLogEntries.isEmpty()) {
-        m_changeLogDisplay->setPlainText("No unsaved changes");
         m_discardButton->setEnabled(false);
     } else {
-        QString logText = QString("⚠️ %1 unsaved change(s):\n\n").arg(m_changeLogEntries.size());
-        logText += m_changeLogEntries.join("\n");
-        m_changeLogDisplay->setPlainText(logText);
         m_discardButton->setEnabled(true);
     }
 }

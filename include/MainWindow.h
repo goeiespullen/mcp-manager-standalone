@@ -80,6 +80,7 @@ private:
     QWidget* createToolsBrowserTab();
     QWidget* createApiTesterTab();
     QWidget* createPermissionsTab();
+    QWidget* createToolsAndPermissionsTab();
     void loadSettings();
     void saveSettings();
     void populateServerTable();
@@ -151,8 +152,6 @@ private:
     // Permissions
     QTableWidget* m_permissionsTable;
     QMap<int, class QCheckBox*> m_globalPermissionCheckboxes;  // category -> checkbox
-    QTextEdit* m_changeLogDisplay;  // Unsaved changes
-    QTextEdit* m_changeHistoryDisplay;  // Permanent history with timestamps
     QPushButton* m_discardButton;
     QStringList m_changeLogEntries;  // Unsaved changes (cleared on save)
     QStringList m_changeHistoryEntries;  // Permanent history with timestamps
