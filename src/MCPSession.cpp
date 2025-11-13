@@ -242,6 +242,20 @@ void MCPSession::onProcessReadyRead() {
                 continue;
             }
 
+            // Log response with timing info
+            QString method = obj["method"].toString();
+            QJsonValue id = obj["id"];
+            bool isError = obj.contains("error");
+
+            if (!method.isEmpty()) {
+                // This is a notification
+                qDebug() << "Session" << m_sessionId << "received notification:" << method;
+            } else if (id.isDouble() || id.isString()) {
+                // This is a response to a request
+                qDebug() << "Session" << m_sessionId << "received response for id:" << id.toString()
+                         << (isError ? "[ERROR]" : "[SUCCESS]");
+            }
+
             emit responseReceived(obj);
         }
     }

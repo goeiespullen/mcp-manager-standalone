@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NS MCP Gateway Launcher</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .icon-container {
+            margin-bottom: 30px;
+        }
+
+        .icon-container img {
+            width: 120px;
+            height: 120px;
+            filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .status.checking {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status.online {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.offline {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .status.online .status-dot {
+            background: #28a745;
+        }
+
+        .status.offline .status-dot {
+            background: #dc3545;
+        }
+
+        .status.checking .status-dot {
+            background: #ffc107;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .button-group {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-top: 30px;
+            text-align: left;
+        }
+
+        .info-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+        }
+
+        .info-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .info-value {
+            font-size: 18px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        .server-list {
+            margin-top: 30px;
+            text-align: left;
+        }
+
+        .server-item {
+            background: #f8f9fa;
+            padding: 12px 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .server-name {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .server-status {
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: #e9ecef;
+            color: #495057;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon-container">
+            <img src="mcp-gateway.svg" alt="NS MCP Gateway">
+        </div>
+
+        <h1>NS MCP Gateway</h1>
+        <p class="subtitle">NS Model Context Protocol Gateway Manager</p>
+
+        <div id="status" class="status checking">
+            <span class="status-dot"></span>
+            <span id="statusText">Checking status...</span>
+        </div>
+
+        <div class="info-grid">
+            <div class="info-item">
+                <div class="info-label">Gateway Port</div>
+                <div class="info-value">8700</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Protocol</div>
+                <div class="info-value">HTTP/JSON-RPC</div>
+            </div>
+        </div>
+
+        <div class="button-group">
+            <button id="startBtn" class="btn btn-success" onclick="startGateway()">
+                ▶️ Start Gateway
+            </button>
+            <button id="stopBtn" class="btn btn-danger" onclick="stopGateway()">
+                ⏹️ Stop Gateway
+            </button>
+            <button class="btn btn-secondary" onclick="viewLogs()">
+                📄 View Logs
+            </button>
+            <a href="http://localhost:8700/list-servers" target="_blank" class="btn btn-primary">
+                🔗 Open Gateway (localhost:8700)
+            </a>
+        </div>
+
+        <div class="server-list">
+            <h3 style="margin-bottom: 15px; color: #333;">Available Servers</h3>
+            <div class="server-item">
+                <span class="server-name">🔷 Azure DevOps</span>
+                <span class="server-status">Port 8765</span>
+            </div>
+            <div class="server-item">
+                <span class="server-name">💬 ChatNS</span>
+                <span class="server-status">Port 8767</span>
+            </div>
+            <div class="server-item">
+                <span class="server-name">📚 Confluence</span>
+                <span class="server-status">Port 8766</span>
+            </div>
+            <div class="server-item">
+                <span class="server-name">🎯 Demo MCP</span>
+                <span class="server-status">Port 8768</span>
+            </div>
+            <div class="server-item">
+                <span class="server-name">👥 TeamCentraal</span>
+                <span class="server-status">Port 8770</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function checkStatus() {
+            try {
+                const response = await fetch('http://localhost:8700/list-servers', {
+                    method: 'GET',
+                    timeout: 3000
+                });
+
+                if (response.ok) {
+                    updateStatus('online', '✅ Gateway is running');
+                } else {
+                    updateStatus('offline', '❌ Gateway is not responding');
+                }
+            } catch (error) {
+                updateStatus('offline', '❌ Gateway is offline');
+            }
+        }
+
+        function updateStatus(status, text) {
+            const statusEl = document.getElementById('status');
+            const statusTextEl = document.getElementById('statusText');
+
+            statusEl.className = `status ${status}`;
+            statusTextEl.textContent = text;
+        }
+
+        function startGateway() {
+            updateStatus('checking', '⏳ Starting gateway...');
+
+            // Open in new window to execute
+            const cmd = 'cd /home/laptop/MEGA/development/chatns/mcp-manager && ./run.sh';
+            alert('To start the gateway, run this command in a terminal:\n\n' + cmd);
+
+            setTimeout(checkStatus, 3000);
+        }
+
+        function stopGateway() {
+            updateStatus('checking', '⏳ Stopping gateway...');
+
+            const cmd = 'pkill -9 mcp-manager';
+            alert('To stop the gateway, run this command in a terminal:\n\n' + cmd);
+
+            setTimeout(checkStatus, 2000);
+        }
+
+        function viewLogs() {
+            const logPath = '/home/laptop/MEGA/development/chatns/mcp-manager/mcp-manager.log';
+            alert('View logs at:\n\n' + logPath + '\n\nOr run: tail -f ' + logPath);
+        }
+
+        // Check status on load and every 5 seconds
+        checkStatus();
+        setInterval(checkStatus, 5000);
+    </script>
+</body>
+</html>

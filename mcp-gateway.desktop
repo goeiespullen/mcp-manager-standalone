@@ -1,0 +1,21 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=NS MCP Gateway
+Comment=NS Model Context Protocol Gateway - Manages MCP servers for ChatNS
+Icon=/home/laptop/MEGA/development/chatns/mcp-manager/mcp-gateway.svg
+Exec=/home/laptop/MEGA/development/chatns/mcp-manager/run.sh
+Path=/home/laptop/MEGA/development/chatns/mcp-manager
+Terminal=false
+StartupNotify=true
+Categories=Development;Network;
+Keywords=MCP;Gateway;ChatNS;AI;Tools;
+Actions=ViewLogs;Stop;
+
+[Desktop Action ViewLogs]
+Name=View Logs
+Exec=gnome-terminal -- tail -f /home/laptop/MEGA/development/chatns/mcp-manager/mcp-manager.log
+
+[Desktop Action Stop]
+Name=Stop Gateway
+Exec=pkill -9 mcp-manager
