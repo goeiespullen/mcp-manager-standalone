@@ -44,7 +44,7 @@ class ConfluenceAPIError(Exception):
     pass
 
 
-def _make_request(url: str, method: str = "GET", timeout: int = 30) -> dict:
+def _make_request(url: str, method: str = "GET", timeout: int = 60) -> dict:
     """Make authenticated request to Confluence API."""
     if not config.is_confluence_configured():
         raise ConfluenceAPIError("Confluence not configured (missing email or API token)")
@@ -372,6 +372,7 @@ async def _search_pages(cql: str, limit: int = 100) -> list[TextContent]:
     """Search pages using CQL."""
     pages = []
     start = 0
+    MAX_RESULTS = 500  # Prevent fetching thousands of pages
 
     while True:
         url = (f"{config.confluence_base_url.rstrip('/')}/rest/api/search?"
@@ -390,13 +391,15 @@ async def _search_pages(cql: str, limit: int = 100) -> list[TextContent]:
                 "excerpt": page.get("excerpt", "")
             })
 
-        if len(results) < limit:
+        # Stop if no more results OR we've reached max results
+        if len(results) < limit or len(pages) >= MAX_RESULTS:
             break
         start += limit
 
     page_info = []
     for page in pages:
-        page_info.append(f"{page['title']} ({page['spaceKey']}) - {page['url']}")
+        # Include Page ID so get_page_content can use it
+        page_info.append(f"{page['title']} (ID: {page['id']}, Space: {page['spaceKey']}) - {page['url']}")
 
     return [TextContent(
         type="text",

@@ -34,23 +34,6 @@
         },
         {
             "arguments": [
-                "mcp_servers/confluence_server.py"
-            ],
-            "autostart": false,
-            "command": "/home/laptop/MEGA/development/chatns/chatns_summerschool/.venv/bin/python",
-            "description": "Custom Confluence MCP Server",
-            "env": {
-                "CONFLUENCE_URL": "https://ns-topaas.atlassian.net/wiki"
-            },
-            "githubRepo": "https://github.com/sooperset/mcp-atlassian",
-            "healthCheckInterval": 30000,
-            "name": "Confluence",
-            "port": 8766,
-            "type": "python",
-            "workingDir": "/home/laptop/MEGA/development/chatns/mcp-manager"
-        },
-        {
-            "arguments": [
                 "mcp_servers/teamcentraal_server.py"
             ],
             "autostart": false,
@@ -65,6 +48,26 @@
             "port": 8770,
             "type": "python",
             "workingDir": "/home/laptop/MEGA/development/chatns/mcp-manager"
+        },
+        {
+            "arguments": [
+                "run",
+                "--rm",
+                "-i",
+                "--env-file",
+                "/home/laptop/MEGA/development/chatns/chatnsbot-standalone/atlassian-mcp.env",
+                "ghcr.io/sooperset/mcp-atlassian:latest"
+            ],
+            "autostart": false,
+            "command": "docker",
+            "description": "Atlassian MCP Server (Community) - Full Jira + Confluence integration with 40+ tools",
+            "env": {},
+            "githubRepo": "https://github.com/sooperset/mcp-atlassian",
+            "healthCheckInterval": 30000,
+            "name": "Atlassian",
+            "port": 8771,
+            "type": "docker",
+            "workingDir": "/home/laptop/MEGA/development/chatns/chatnsbot-standalone"
         }
     ],
     "version": "1.0"

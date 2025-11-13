@@ -287,6 +287,11 @@ void MCPGateway::handleDestroySession(QTcpSocket* client, const QJsonValue& id, 
 
 void MCPGateway::handleToolCall(QTcpSocket* client, const QJsonValue& id, const QJsonObject& params) {
     QString sessionId = params["sessionId"].toString();
+    QString toolName = params["name"].toString();
+
+    // Log tool call start with timing
+    LOG_INFO(Logger::Gateway, QString("Tool call started: session=%1, tool=%2, id=%3")
+        .arg(sessionId).arg(toolName).arg(id.toString()));
 
     if (sessionId.isEmpty()) {
         sendError(client, id, -32602, "Missing sessionId parameter");
@@ -296,17 +301,18 @@ void MCPGateway::handleToolCall(QTcpSocket* client, const QJsonValue& id, const 
     MCPSession* session = m_sessions.value(sessionId);
     if (!session) {
         sendError(client, id, -32602, "Session not found: " + sessionId);
+        LOG_ERROR(Logger::Gateway, QString("Tool call failed: session not found: %1").arg(sessionId));
         return;
     }
 
     // Verify client owns this session
     if (m_sessionClients[sessionId] != client) {
         sendError(client, id, -32603, "Session owned by different client");
+        LOG_ERROR(Logger::Gateway, QString("Tool call failed: session owned by different client"));
         return;
     }
 
     // Check if tool is enabled for this server
-    QString toolName = params["name"].toString();
     QString serverType = session->serverType();
 
     // Get server instance to check if tool is enabled
@@ -321,9 +327,13 @@ void MCPGateway::handleToolCall(QTcpSocket* client, const QJsonValue& id, const 
 
     if (server && !server->isToolEnabled(toolName)) {
         sendError(client, id, -32001, QString("Tool '%1' is disabled for server '%2'").arg(toolName, serverType));
-        qWarning() << "Blocked disabled tool:" << toolName << "for server:" << serverType;
+        LOG_WARNING(Logger::Gateway, QString("Tool call blocked: tool %1 disabled for server %2").arg(toolName, serverType));
         return;
     }
+
+    // Log tool arguments for debugging
+    QJsonDocument argsDoc(params["arguments"].toObject());
+    LOG_DEBUG(Logger::Gateway, QString("Tool call arguments: %1").arg(QString(argsDoc.toJson(QJsonDocument::Compact))));
 
     // Forward request to MCP server subprocess
     QJsonObject mcpRequest;
@@ -336,6 +346,7 @@ void MCPGateway::handleToolCall(QTcpSocket* client, const QJsonValue& id, const 
     mcpParams["arguments"] = params["arguments"];
     mcpRequest["params"] = mcpParams;
 
+    LOG_INFO(Logger::Gateway, QString("Forwarding tool call to MCP server: session=%1, tool=%2").arg(sessionId, toolName));
     session->sendRequest(mcpRequest);
 }
 
