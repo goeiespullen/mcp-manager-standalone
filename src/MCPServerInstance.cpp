@@ -99,19 +99,48 @@ bool MCPServerInstance::start() {
 
     // Setup process environment
     QProcessEnvironment env = buildEnvironment();
-    m_process->setProcessEnvironment(env);
+
+    // Build command arguments
+    QStringList args = buildArguments();
+
+    // For Docker containers, inject environment variables as -e flags
+    // Docker doesn't inherit QProcessEnvironment, so we must pass them via command line
+    if (m_type == "docker" && m_command == "docker") {
+        qDebug() << "Server" << m_name << "injecting environment variables for Docker container";
+
+        // Find position to insert -e flags (after "run" but before image name)
+        int insertPos = 1;  // After "run"
+        while (insertPos < args.size() && args[insertPos].startsWith("-")) {
+            insertPos++;
+        }
+
+        // Insert all environment variables as -e flags
+        QStringList envKeys = env.keys();
+        int envCount = 0;
+        for (const QString& key : envKeys) {
+            QString value = env.value(key);
+            if (!value.isEmpty()) {
+                args.insert(insertPos++, "-e");
+                args.insert(insertPos++, QString("%1=%2").arg(key, value));
+                envCount++;
+                qDebug() << "  Added -e" << key << "=" << (key.contains("TOKEN") || key.contains("PAT") ? "***" : value);
+            }
+        }
+
+        qDebug() << "Server" << m_name << "added" << envCount << "environment variables to Docker command";
+    } else {
+        // For non-Docker servers, use normal QProcessEnvironment
+        m_process->setProcessEnvironment(env);
+    }
 
     // Set working directory if specified
     if (!m_workingDir.isEmpty()) {
         m_process->setWorkingDirectory(m_workingDir);
     }
 
-    // Build command
-    QStringList args = buildArguments();
-
     qDebug() << "Starting server:" << m_name;
     qDebug() << "Command:" << m_command;
-    qDebug() << "Arguments:" << args;
+    qDebug() << "Arguments:" << args.join(" ");
     qDebug() << "Working dir:" << m_workingDir;
 
     // Start the process

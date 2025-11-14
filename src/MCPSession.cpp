@@ -85,15 +85,45 @@ bool MCPSession::startServer() {
         qDebug() << "  AZDO_ORG:" << env.value("AZDO_ORG", "NOT SET");
     }
 
+    // For Docker containers, inject environment variables as -e flags
+    // Docker doesn't inherit QProcessEnvironment, so we must pass them via command line
+    QString serverType = m_serverConfig["type"].toString();
+    if (serverType == "docker" && command == "docker") {
+        qDebug() << "Session" << m_sessionId << "injecting environment variables for Docker container";
+
+        // Find position to insert -e flags (after "run" but before image name)
+        // Typical: ["run", "--rm", "-i", "image:tag", ...]
+        int insertPos = 1;  // After "run"
+        while (insertPos < args.size() && args[insertPos].startsWith("-")) {
+            insertPos++;
+        }
+
+        // Insert all environment variables as -e flags
+        QStringList envKeys = env.keys();
+        int envCount = 0;
+        for (const QString& key : envKeys) {
+            QString value = env.value(key);
+            if (!value.isEmpty()) {
+                args.insert(insertPos++, "-e");
+                args.insert(insertPos++, QString("%1=%2").arg(key, value));
+                envCount++;
+                qDebug() << "  Added -e" << key << "=" << (key.contains("TOKEN") || key.contains("PAT") ? "***" : value);
+            }
+        }
+
+        qDebug() << "Session" << m_sessionId << "added" << envCount << "environment variables to Docker command";
+    } else {
+        // For non-Docker servers, use normal QProcessEnvironment
+        m_process->setProcessEnvironment(env);
+    }
+
     // Set working directory if specified
     QString workingDir = m_serverConfig["workingDir"].toString();
     if (!workingDir.isEmpty()) {
         m_process->setWorkingDirectory(workingDir);
     }
 
-    m_process->setProcessEnvironment(env);
-
-    qDebug() << "Session" << m_sessionId << "starting server:" << command << args;
+    qDebug() << "Session" << m_sessionId << "starting server:" << command << args.join(" ");
 
     // Start process
     m_process->start(command, args);
