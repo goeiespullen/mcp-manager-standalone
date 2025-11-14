@@ -198,6 +198,8 @@ bool MCPServerManager::addServer(const QJsonObject& serverConfig) {
             this, &MCPServerManager::onServerOutput);
     connect(server, &MCPServerInstance::errorOccurred,
             this, &MCPServerManager::onServerError);
+    connect(server, &MCPServerInstance::permissionsChanged,
+            this, &MCPServerManager::onServerPermissionsChanged);
 
     m_servers.insert(name, server);
 
@@ -405,4 +407,16 @@ bool MCPServerManager::getGlobalPermission(MCPServerInstance::PermissionCategory
 void MCPServerManager::setGlobalPermission(MCPServerInstance::PermissionCategory category, bool enabled) {
     m_globalPermissions[category] = enabled;
     qDebug() << "Global permission" << category << "set to" << enabled;
+    emit globalPermissionsChanged();
+}
+
+void MCPServerManager::onServerPermissionsChanged() {
+    MCPServerInstance* server = qobject_cast<MCPServerInstance*>(sender());
+    if (!server) return;
+
+    QString name = findServerNameByInstance(server);
+    if (!name.isEmpty()) {
+        qDebug() << "Server" << name << "permissions changed, emitting signal";
+        emit serverPermissionsChanged(name);
+    }
 }

@@ -50,6 +50,8 @@ private slots:
     void onSessionResponse(const QJsonObject& response);
     void onSessionServerError(const QString& error);
     void onSessionClientDisconnected();
+    void onServerPermissionsChanged(const QString& serverName);
+    void onGlobalPermissionsChanged();
 
 private:
     // Protocol handlers

@@ -63,12 +63,15 @@ signals:
     void serverOutputReceived(const QString& name, const QString& line);
     void serverErrorOccurred(const QString& name, const QString& error);
     void configChanged();
+    void serverPermissionsChanged(const QString& name); // Emitted when server permissions are modified
+    void globalPermissionsChanged(); // Emitted when global permissions are modified
 
 private slots:
     void onServerStatusChanged(MCPServerInstance::ServerStatus oldStatus,
                               MCPServerInstance::ServerStatus newStatus);
     void onServerOutput(const QString& line);
     void onServerError(const QString& error);
+    void onServerPermissionsChanged();
 
 private:
     QString findServerNameByInstance(MCPServerInstance* instance) const;

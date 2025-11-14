@@ -288,6 +288,60 @@ QProcessEnvironment MCPSession::buildEnvironment() const {
         }
     }
 
+    // Fallback: If no credentials provided, try to inherit from parent process environment
+    // This ensures that servers work even when dashboard doesn't send credentials
+    if (m_credentials.isEmpty() || m_credentials.keys().isEmpty()) {
+        qDebug() << "Session" << m_sessionId << "no credentials provided, checking parent environment";
+
+        // ChatNS credentials
+        if (m_serverType == "ChatNS") {
+            QStringList chatnsKeys = {"CHAT_APIM", "OCP_APIM_SUBSCRIPTION_KEY", "CHAT_BEARER"};
+            for (const QString& key : chatnsKeys) {
+                QString value = qEnvironmentVariable(key.toUtf8().constData());
+                if (!value.isEmpty() && !env.contains(key)) {
+                    env.insert(key, value);
+                    qDebug() << "Session" << m_sessionId << "inherited from parent:" << key;
+                }
+            }
+        }
+
+        // Azure DevOps credentials
+        if (m_serverType == "Azure DevOps") {
+            QStringList azureKeys = {"AZDO_PAT", "AZDO_ORG"};
+            for (const QString& key : azureKeys) {
+                QString value = qEnvironmentVariable(key.toUtf8().constData());
+                if (!value.isEmpty() && !env.contains(key)) {
+                    env.insert(key, value);
+                    qDebug() << "Session" << m_sessionId << "inherited from parent:" << key;
+                }
+            }
+        }
+
+        // Atlassian credentials
+        if (m_serverType == "Atlassian") {
+            QStringList atlassianKeys = {"ATLASSIAN_EMAIL", "ATLASSIAN_API_TOKEN", "CONFLUENCE_URL", "JIRA_URL"};
+            for (const QString& key : atlassianKeys) {
+                QString value = qEnvironmentVariable(key.toUtf8().constData());
+                if (!value.isEmpty() && !env.contains(key)) {
+                    env.insert(key, value);
+                    qDebug() << "Session" << m_sessionId << "inherited from parent:" << key;
+                }
+            }
+        }
+
+        // TeamCentraal credentials
+        if (m_serverType == "TeamCentraal") {
+            QStringList teamcentraalKeys = {"TEAMCENTRAAL_URL", "TEAMCENTRAAL_USERNAME", "TEAMCENTRAAL_PASSWORD"};
+            for (const QString& key : teamcentraalKeys) {
+                QString value = qEnvironmentVariable(key.toUtf8().constData());
+                if (!value.isEmpty() && !env.contains(key)) {
+                    env.insert(key, value);
+                    qDebug() << "Session" << m_sessionId << "inherited from parent:" << key;
+                }
+            }
+        }
+    }
+
     return env;
 }
 

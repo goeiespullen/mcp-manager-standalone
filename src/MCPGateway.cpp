@@ -14,6 +14,13 @@ MCPGateway::MCPGateway(MCPServerManager* serverManager, QObject* parent)
     , m_sessionCounter(0)
 {
     connect(m_server, &QTcpServer::newConnection, this, &MCPGateway::onNewConnection);
+
+    // Connect permission change signals to destroy sessions when permissions change
+    connect(m_serverManager, &MCPServerManager::serverPermissionsChanged,
+            this, &MCPGateway::onServerPermissionsChanged);
+    connect(m_serverManager, &MCPServerManager::globalPermissionsChanged,
+            this, &MCPGateway::onGlobalPermissionsChanged);
+
     qDebug() << "MCPGateway initialized";
 }
 
@@ -527,4 +534,44 @@ void MCPGateway::cleanupSession(const QString& sessionId) {
     session->deleteLater();
 
     emit sessionDestroyed(sessionId);
+}
+
+void MCPGateway::onServerPermissionsChanged(const QString& serverName) {
+    qDebug() << "Server permissions changed for:" << serverName << "- destroying all sessions for this server";
+    LOG_WARNING(Logger::Gateway, QString("Permissions changed for server %1, destroying all related sessions").arg(serverName));
+
+    // Find and destroy all sessions for this server type
+    QStringList sessionsToDestroy;
+    for (auto it = m_sessions.begin(); it != m_sessions.end(); ++it) {
+        MCPSession* session = it.value();
+        if (session->serverType() == serverName) {
+            sessionsToDestroy.append(it.key());
+        }
+    }
+
+    // Destroy the sessions
+    for (const QString& sessionId : sessionsToDestroy) {
+        qDebug() << "Destroying session" << sessionId << "due to permission change";
+        cleanupSession(sessionId);
+    }
+
+    if (!sessionsToDestroy.isEmpty()) {
+        qDebug() << "Destroyed" << sessionsToDestroy.size() << "session(s) for server" << serverName;
+    }
+}
+
+void MCPGateway::onGlobalPermissionsChanged() {
+    qDebug() << "Global permissions changed - destroying ALL sessions";
+    LOG_WARNING(Logger::Gateway, "Global permissions changed, destroying all active sessions");
+
+    // Destroy all active sessions when global permissions change
+    QStringList sessionIds = m_sessions.keys();
+    for (const QString& sessionId : sessionIds) {
+        qDebug() << "Destroying session" << sessionId << "due to global permission change";
+        cleanupSession(sessionId);
+    }
+
+    if (!sessionIds.isEmpty()) {
+        qDebug() << "Destroyed" << sessionIds.size() << "total session(s) due to global permission change";
+    }
 }

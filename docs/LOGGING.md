@@ -122,6 +122,35 @@ grep "Session created" ~/.local/share/mcp-manager/logs/gateway.log
 grep "Session.*destroyed" ~/.local/share/mcp-manager/logs/gateway.log
 ```
 
+### Permission Change Monitoring (NEW!)
+
+**Permission wijzigingen tracken:**
+```bash
+# Alle permission wijzigingen
+grep "Permission\|permissions" ~/.local/share/mcp-manager/logs/server.log
+
+# Per-server permission changes
+grep "Permission.*set to.*for" ~/.local/share/mcp-manager/logs/server.log
+
+# Global permission changes
+grep "Global permission" ~/.local/share/mcp-manager/logs/server.log
+
+# Session destruction door permission changes
+grep "Permissions changed.*destroying" ~/.local/share/mcp-manager/logs/gateway.log
+
+# Permission enforcement (blocked tools)
+grep "insufficient permissions" ~/.local/share/mcp-manager/logs/gateway.log
+```
+
+**Voorbeeld output:**
+```
+[2025-11-14 21:04:35.123] [INFO ] [SERVER ] Permission READ_REMOTE set to false for ChatNS (explicit override)
+[2025-11-14 21:04:35.124] [INFO ] [SERVER ] Server ChatNS permissions changed, emitting signal
+[2025-11-14 21:04:35.125] [WARN ] [GATEWAY] Permissions changed for server ChatNS, destroying all related sessions
+[2025-11-14 21:04:35.126] [INFO ] [GATEWAY] Destroying session 1fd5ac9d-f714-43 due to permission change
+[2025-11-14 21:04:35.127] [INFO ] [GATEWAY] Destroyed 1 session(s) for server ChatNS
+```
+
 ## 🔧 Configuratie (Code Level)
 
 ### Log Directory wijzigen
@@ -230,6 +259,9 @@ du -sh ~/.local/share/mcp-manager/logs/
 - Alle MCP JSON-RPC messages
 - Foutmeldingen (kunnen data bevatten)
 - Debug informatie
+- Permission wijzigingen (global en per-server)
+- Session lifecycle events (creation/destruction)
+- Tool access denials (blocked by permissions)
 
 **⚠️ Belangrijk:**
 - Log bestanden kunnen gevoelige informatie bevatten
@@ -321,8 +353,11 @@ Bij problemen met logging:
 4. ✅ **Check log rotation** werkt correct
 5. ✅ **Filter gevoelige data** voor delen van logs
 6. ✅ **Bewaar logs** van productie servers minimaal 90 dagen
+7. ✅ **Track permission changes** in server.log voor audit trail
+8. ✅ **Monitor session destruction** events na permission wijzigingen
+9. ✅ **Review blocked tool calls** voor onverwachte permission denials
 
 ---
 
-**Laatst bijgewerkt:** 2025-10-29
-**Versie:** 1.0
+**Laatst bijgewerkt:** 2025-11-14
+**Versie:** 1.1 - Added permission change monitoring

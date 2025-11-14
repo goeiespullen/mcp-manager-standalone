@@ -639,11 +639,13 @@ bool MCPServerInstance::hasPermission(PermissionCategory category) const {
 void MCPServerInstance::setPermission(PermissionCategory category, bool enabled) {
     m_permissions[category] = enabled;
     qDebug() << "Permission" << category << "set to" << enabled << "for" << m_name << "(explicit override)";
+    emit permissionsChanged();
 }
 
 void MCPServerInstance::clearPermission(PermissionCategory category) {
     m_permissions.remove(category);
     qDebug() << "Permission" << category << "cleared for" << m_name << "(will use global default)";
+    emit permissionsChanged();
 }
 
 bool MCPServerInstance::hasExplicitPermission(PermissionCategory category) const {

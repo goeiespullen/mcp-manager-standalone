@@ -65,6 +65,15 @@ MCP Manager provides two modes of operation:
 - 📡 **JSON-RPC 2.0** - Standard protocol over TCP
 - 🔍 **Traffic Monitoring** - Built-in protocol inspector
 - 🎯 **Zero Server Modification** - Works with any MCP server
+- 🔐 **Credential Inheritance** - Automatic fallback to environment variables
+
+### Permission Management (NEW!)
+- 🛡️ **Fine-grained Access Control** - Control tool access per server and globally
+- 🔍 **Universal Auto-detection** - Automatic permission categorization for all MCP servers
+- ⚡ **Real-time Enforcement** - Sessions destroyed automatically on permission changes
+- 📊 **Unified Interface** - Combined tools browser and permissions in single tab
+- 📝 **Change Tracking** - Audit log for all permission modifications
+- 🌍 **Global Defaults** - Set baseline permissions for all servers with per-server overrides
 
 ## Quick Start
 
@@ -311,6 +320,147 @@ export CHAT_BEARER="your-bearer-token"
 export CHAT_APIM="your-apim-subscription-key"
 ```
 
+## Permission Management
+
+### Permission Categories
+
+MCP Manager implements five permission categories to control tool access:
+
+| Permission | Description | Default | Use Cases |
+|-----------|-------------|---------|-----------|
+| `READ_REMOTE` | Read from remote services | ✅ Enabled | Search, list, view operations |
+| `WRITE_REMOTE` | Write/modify remote data | ❌ Disabled | Create, update, delete operations |
+| `WRITE_LOCAL` | Save/export to filesystem | ❌ Disabled | Download, export, save operations |
+| `EXECUTE_AI` | Use AI/LLM capabilities | ❌ Disabled | Chat, completion, generation |
+| `EXECUTE_CODE` | Execute code or scripts | ❌ Disabled | Run, build, compile operations |
+
+### Permission Hierarchy
+
+1. **Global Defaults** - Baseline permissions for all servers
+2. **Per-Server Overrides** - Explicit overrides for specific servers
+3. **Tool Requirements** - Each tool declares required permissions
+4. **Runtime Check** - Gateway validates permissions on every tool call
+
+### Auto-detection Logic
+
+Tools are automatically assigned permissions based on keywords in their name and description:
+
+```
+Write Operations:
+  Keywords: create, update, delete, add, modify, set, post, put, transition, link
+  → WRITE_REMOTE
+
+Download/Export:
+  Keywords: download, export, save, dump
+  → WRITE_LOCAL
+
+AI Operations:
+  Keywords: chat, completion, generate, ai, gpt, llm
+  → EXECUTE_AI
+
+Code Execution:
+  Keywords: execute, run, script, build, compile
+  → EXECUTE_CODE
+
+Default:
+  If no write/download/ai/code keywords detected
+  → READ_REMOTE
+```
+
+### Real-time Enforcement
+
+When permissions are changed:
+
+1. **Signal Emission** - `MCPServerInstance` emits `permissionsChanged()`
+2. **Manager Relay** - `MCPServerManager` relays signal with server name
+3. **Gateway Action** - `MCPGateway` destroys affected sessions
+4. **Session Cleanup** - All subprocess instances terminated
+5. **Next Request** - New session created with updated permissions
+6. **Logging** - All actions logged to Traffic Monitor
+
+### Permission Workflow Example
+
+```
+1. User disables WRITE_REMOTE for ChatNS
+   ↓
+2. Signal chain: MCPServerInstance → MCPServerManager → MCPGateway
+   ↓
+3. Gateway finds all ChatNS sessions (e.g., session abc123)
+   ↓
+4. Gateway destroys session abc123
+   ↓
+5. Log: "Permissions changed for server ChatNS, destroying all related sessions"
+   ↓
+6. Next tool call creates new session with WRITE_REMOTE disabled
+   ↓
+7. Tool requiring WRITE_REMOTE is blocked: "insufficient permissions"
+```
+
+### Configuration File Format
+
+Permissions are saved in `configs/servers.json`:
+
+```json
+{
+  "permissions": {
+    "global_defaults": {
+      "READ_REMOTE": true,
+      "WRITE_REMOTE": false,
+      "WRITE_LOCAL": false,
+      "EXECUTE_AI": false,
+      "EXECUTE_CODE": false
+    }
+  },
+  "servers": [
+    {
+      "name": "ChatNS",
+      "permissions": {
+        "EXECUTE_AI": true,
+        "READ_REMOTE": true
+      }
+    }
+  ]
+}
+```
+
+### Credential Management
+
+**Environment Variable Inheritance:**
+
+When no credentials are provided by the client, MCP Manager automatically inherits credentials from its environment:
+
+```bash
+# ChatNS
+export CHAT_APIM="your-apim-key"
+export OCP_APIM_SUBSCRIPTION_KEY="your-subscription-key"
+export CHAT_BEARER="your-bearer-token"
+
+# Azure DevOps
+export AZDO_PAT="your-personal-access-token"
+export AZDO_ORG="your-organization"
+
+# Atlassian
+export ATLASSIAN_EMAIL="your-email@example.com"
+export ATLASSIAN_API_TOKEN="your-api-token"
+export CONFLUENCE_URL="https://your-instance.atlassian.net/wiki"
+export JIRA_URL="https://your-instance.atlassian.net"
+
+# TeamCentraal
+export TEAMCENTRAAL_URL="https://teamcentraal.ns.nl/odata/POS_Odata_v4"
+export TEAMCENTRAAL_USERNAME="your-username"
+export TEAMCENTRAAL_PASSWORD="your-password"
+```
+
+**Credential Priority:**
+
+1. Client-provided credentials (highest priority)
+2. Environment variables (fallback)
+3. Config file `env` section (base environment)
+
+This enables seamless operation for both:
+- **Dashboard clients** with explicit credential management
+- **CLI tools** relying on environment variables
+
 ## Configuration
 
 ### Server Configuration
@@ -400,21 +550,62 @@ Examples:
 - Start/stop individual servers or all at once
 - Real-time status, port, and PID display
 
-### 2. Gateway Tab (NEW!)
+### 2. Gateway Tab
 - Gateway status and port
 - Active session count
 - Python client usage examples
 - Session management tips
 
-### 3. Logs Tab
+### 3. Tools & Permissions Tab (NEW!)
+Unified interface for tool management and access control:
+
+**📋 Tools Browser Section:**
+- Browse available tools per server
+- See tool descriptions and required permissions
+- Check real-time access status
+- Enable/disable individual tools
+
+**🌍 Global Permissions Section:**
+- Set default permissions for all servers:
+  - `READ_REMOTE` - Read from remote services (default: enabled)
+  - `WRITE_REMOTE` - Write/modify remote data (default: disabled)
+  - `WRITE_LOCAL` - Save/export to local filesystem (default: disabled)
+  - `EXECUTE_AI` - Use AI/LLM capabilities (default: disabled)
+  - `EXECUTE_CODE` - Execute code or scripts (default: disabled)
+
+**🖥️ Per-Server Overrides Section:**
+- Override global defaults for specific servers
+- Clear overrides to use global defaults
+- Visual indication of effective permissions
+
+**📝 Change Logging Section (Collapsible):**
+- Track all permission modifications
+- See timestamp, action, and changes
+- Discard unsaved changes
+- View complete change history in separate window
+
+**Permission Auto-detection:**
+- Tools are automatically categorized based on name and description
+- Keywords detected: create, update, delete, download, export, execute, chat, etc.
+- Manual adjustments possible via per-server overrides
+
+**Real-time Enforcement:**
+- Permission changes take effect immediately
+- Active sessions are automatically destroyed when permissions change
+- Next tool call creates new session with updated permissions
+- All enforcement actions logged in Traffic Monitor
+
+### 4. Logs Tab
 - View stdout/stderr from all servers
 - Filter by specific server
 - Clear logs
 
-### 4. Traffic Monitor Tab
+### 5. Traffic Monitor Tab
 - Inspect MCP protocol messages
 - Request/response tracking
 - Client connection monitoring
+- Permission enforcement events
+- Session lifecycle tracking
 
 ## Architecture Components
 
@@ -423,24 +614,33 @@ Examples:
 - Start/stop/restart servers
 - Monitor server health
 - Auto-restart on crashes
+- **Global permission management**
+- **Permission change signal relay**
 
 ### MCPGateway
 - Master TCP server (port 8700)
 - Session creation/destruction
 - Request routing
 - Multi-client handling
+- **Permission enforcement**
+- **Automatic session cleanup on permission changes**
 
 ### MCPSession
 - Dedicated MCP server subprocess
 - Client-specific credential injection
 - Bidirectional communication
 - Automatic lifecycle management
+- **Environment variable inheritance**
+- **Server-specific credential fallback**
 
 ### MCPServerInstance
 - Single server process management
 - Health monitoring
 - Output capture
 - Port management
+- **Tool permission auto-detection**
+- **Per-server permission overrides**
+- **Tool access validation**
 
 ## Performance
 
@@ -533,18 +733,25 @@ tests/
 ✅ Easy to add new servers
 ✅ No modifications to third-party code
 ✅ Built-in monitoring and logging
+✅ Automatic permission detection
+✅ Environment variable fallback
 
 ### For Operations
 ✅ Centralized management
 ✅ Process health monitoring
 ✅ Auto-restart on crashes
 ✅ Easy credential rotation
+✅ Real-time permission enforcement
+✅ Comprehensive audit logging
 
 ### For Security
 ✅ Credential isolation per tenant
 ✅ No credentials in config files
 ✅ Session-based access control
 ✅ Automatic cleanup
+✅ Fine-grained tool permissions
+✅ Immediate permission changes
+✅ Complete change tracking
 
 ## Roadmap
 
@@ -555,6 +762,12 @@ tests/
 - ✅ Credential injection
 - ✅ Multi-tenant support
 - ✅ Python client library
+- ✅ Fine-grained permission system
+- ✅ Universal tool permission auto-detection
+- ✅ Real-time permission enforcement
+- ✅ Environment variable credential inheritance
+- ✅ Unified tools & permissions interface
+- ✅ Change tracking and audit logging
 - ⏳ GUI server add/edit dialogs
 - ⏳ REST API for external control
 - ⏳ Docker support

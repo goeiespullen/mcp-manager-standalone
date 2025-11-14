@@ -98,6 +98,7 @@ signals:
     void outputReceived(const QString& line);
     void errorOutputReceived(const QString& line);
     void toolsChanged(); // Emitted when tools list is updated
+    void permissionsChanged(); // Emitted when permissions are modified
 
 private slots:
     void onProcessStarted();

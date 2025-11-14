@@ -47,7 +47,10 @@
             "healthCheckInterval": 30000,
             "name": "Azure DevOps",
             "permissions": {
-                "WRITE_LOCAL": true
+                "EXECUTE_AI": true,
+                "EXECUTE_CODE": true,
+                "WRITE_LOCAL": true,
+                "WRITE_REMOTE": true
             },
             "port": 8765,
             "type": "python",
@@ -65,8 +68,11 @@
             "healthCheckInterval": 30000,
             "name": "ChatNS",
             "permissions": {
-                "EXECUTE_AI": true,
-                "WRITE_LOCAL": false
+                "EXECUTE_AI": false,
+                "EXECUTE_CODE": false,
+                "READ_REMOTE": false,
+                "WRITE_LOCAL": false,
+                "WRITE_REMOTE": false
             },
             "port": 8767,
             "type": "python",
