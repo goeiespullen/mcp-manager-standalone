@@ -103,31 +103,34 @@ bool MCPServerInstance::start() {
     // Build command arguments
     QStringList args = buildArguments();
 
-    // For Docker containers, inject environment variables as -e flags
-    // Docker doesn't inherit QProcessEnvironment, so we must pass them via command line
+    // For Docker containers, inject only custom environment variables as -e flags
+    // Docker doesn't inherit QProcessEnvironment, so we must pass credentials via -e
     if (m_type == "docker" && m_command == "docker") {
-        qDebug() << "Server" << m_name << "injecting environment variables for Docker container";
+        // Only inject custom env vars from config, NOT system environment
+        QJsonObject envObj = m_environment;
+        if (!envObj.isEmpty()) {
+            qDebug() << "Server" << m_name << "injecting custom environment variables for Docker container";
 
-        // Find position to insert -e flags (after "run" but before image name)
-        int insertPos = 1;  // After "run"
-        while (insertPos < args.size() && args[insertPos].startsWith("-")) {
-            insertPos++;
-        }
-
-        // Insert all environment variables as -e flags
-        QStringList envKeys = env.keys();
-        int envCount = 0;
-        for (const QString& key : envKeys) {
-            QString value = env.value(key);
-            if (!value.isEmpty()) {
-                args.insert(insertPos++, "-e");
-                args.insert(insertPos++, QString("%1=%2").arg(key, value));
-                envCount++;
-                qDebug() << "  Added -e" << key << "=" << (key.contains("TOKEN") || key.contains("PAT") ? "***" : value);
+            // Find position to insert -e flags (after "run" but before image name)
+            int insertPos = 1;  // After "run"
+            while (insertPos < args.size() && args[insertPos].startsWith("-")) {
+                insertPos++;
             }
-        }
 
-        qDebug() << "Server" << m_name << "added" << envCount << "environment variables to Docker command";
+            // Insert only custom environment variables as -e flags
+            int envCount = 0;
+            for (auto it = envObj.begin(); it != envObj.end(); ++it) {
+                QString value = it.value().toString();
+                if (!value.isEmpty()) {
+                    args.insert(insertPos++, "-e");
+                    args.insert(insertPos++, QString("%1=%2").arg(it.key(), value));
+                    envCount++;
+                    qDebug() << "  Added -e" << it.key() << "=" << (it.key().contains("TOKEN") || it.key().contains("PAT") ? "***" : value);
+                }
+            }
+
+            qDebug() << "Server" << m_name << "added" << envCount << "custom environment variables to Docker command";
+        }
     } else {
         // For non-Docker servers, use normal QProcessEnvironment
         m_process->setProcessEnvironment(env);

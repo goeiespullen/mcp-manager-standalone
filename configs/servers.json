@@ -1,7 +1,7 @@
 {
     "permissions": {
         "global_defaults": {
-            "EXECUTE_AI": false,
+            "EXECUTE_AI": true,
             "EXECUTE_CODE": false,
             "READ_REMOTE": true,
             "WRITE_LOCAL": false,
@@ -14,6 +14,8 @@
                 "run",
                 "--rm",
                 "-i",
+                "--env-file",
+                "/home/laptop/MEGA/development/chatns/chatnsbot-standalone/atlassian-mcp.env",
                 "ghcr.io/sooperset/mcp-atlassian:latest"
             ],
             "autostart": false,
@@ -71,11 +73,11 @@
             "healthCheckInterval": 30000,
             "name": "ChatNS",
             "permissions": {
-                "EXECUTE_AI": false,
-                "EXECUTE_CODE": false,
-                "READ_REMOTE": false,
-                "WRITE_LOCAL": false,
-                "WRITE_REMOTE": false
+                "EXECUTE_AI": true,
+                "EXECUTE_CODE": true,
+                "READ_REMOTE": true,
+                "WRITE_LOCAL": true,
+                "WRITE_REMOTE": true
             },
             "port": 8767,
             "type": "python",
