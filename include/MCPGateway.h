@@ -34,6 +34,7 @@ public:
     // Session management
     int activeSessionCount() const { return m_sessions.size(); }
     QStringList activeSessions() const { return m_sessions.keys(); }
+    QList<MCPSession*> getAllSessions() const { return m_sessions.values(); }
 
 signals:
     void clientConnected(const QString& clientId);

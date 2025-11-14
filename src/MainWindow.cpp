@@ -2783,27 +2783,15 @@ void MainWindow::updateGatewayStatus() {
         return;
     }
 
-    // Get all active sessions
-    QStringList sessionIds = m_gateway->activeSessions();
+    // Get all active sessions directly from gateway
+    QList<MCPSession*> sessions = m_gateway->getAllSessions();
 
     // Update table row count
-    m_gatewaySessionsTable->setRowCount(sessionIds.size());
+    m_gatewaySessionsTable->setRowCount(sessions.size());
 
     // Populate table with session details
-    for (int i = 0; i < sessionIds.size(); ++i) {
-        const QString& sessionId = sessionIds[i];
-
-        // Get session from gateway (need to add accessor method)
-        // For now, we'll populate with sessionId and extract info from sessions map
-        const auto& sessions = m_gateway->findChildren<MCPSession*>();
-        MCPSession* session = nullptr;
-
-        for (MCPSession* s : sessions) {
-            if (s->sessionId() == sessionId) {
-                session = s;
-                break;
-            }
-        }
+    for (int i = 0; i < sessions.size(); ++i) {
+        MCPSession* session = sessions[i];
 
         if (!session) {
             continue;
