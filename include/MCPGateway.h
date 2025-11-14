@@ -59,6 +59,7 @@ private:
     void handleMessage(QTcpSocket* client, const QJsonObject& message);
     void handleCreateSession(QTcpSocket* client, const QJsonValue& id, const QJsonObject& params);
     void handleDestroySession(QTcpSocket* client, const QJsonValue& id, const QJsonObject& params);
+    void handleToolsList(QTcpSocket* client, const QJsonValue& id, const QJsonObject& params);
     void handleToolCall(QTcpSocket* client, const QJsonValue& id, const QJsonObject& params);
     void handleListSessions(QTcpSocket* client, const QJsonValue& id);
     void handleListServers(QTcpSocket* client, const QJsonValue& id);

@@ -195,6 +195,8 @@ void MCPGateway::handleMessage(QTcpSocket* client, const QJsonObject& message) {
         handleListSessions(client, id);
     } else if (method == "mcp-manager/list-servers") {
         handleListServers(client, id);
+    } else if (method == "tools/list") {
+        handleToolsList(client, id, params);
     } else if (method == "tools/call") {
         handleToolCall(client, id, params);
     } else {
@@ -418,6 +420,41 @@ void MCPGateway::handleToolCall(QTcpSocket* client, const QJsonValue& id, const 
     mcpRequest["params"] = mcpParams;
 
     LOG_INFO(Logger::Gateway, QString("Forwarding tool call to MCP server: session=%1, tool=%2").arg(sessionId, toolName));
+    session->sendRequest(mcpRequest);
+}
+
+void MCPGateway::handleToolsList(QTcpSocket* client, const QJsonValue& id, const QJsonObject& params) {
+    QString sessionId = params["sessionId"].toString();
+
+    LOG_INFO(Logger::Gateway, QString("Tools list requested: session=%1").arg(sessionId));
+
+    if (sessionId.isEmpty()) {
+        sendError(client, id, -32602, "Missing sessionId parameter");
+        return;
+    }
+
+    MCPSession* session = m_sessions.value(sessionId);
+    if (!session) {
+        sendError(client, id, -32602, "Session not found: " + sessionId);
+        LOG_ERROR(Logger::Gateway, QString("Tools list failed: session not found: %1").arg(sessionId));
+        return;
+    }
+
+    // Verify client owns this session
+    if (m_sessionClients[sessionId] != client) {
+        sendError(client, id, -32603, "Session owned by different client");
+        LOG_ERROR(Logger::Gateway, QString("Tools list failed: session owned by different client"));
+        return;
+    }
+
+    // Forward tools/list request to MCP server subprocess
+    QJsonObject mcpRequest;
+    mcpRequest["jsonrpc"] = "2.0";
+    mcpRequest["id"] = id;
+    mcpRequest["method"] = "tools/list";
+    mcpRequest["params"] = QJsonObject();  // tools/list has no params
+
+    LOG_INFO(Logger::Gateway, QString("Forwarding tools/list to MCP server: session=%1").arg(sessionId));
     session->sendRequest(mcpRequest);
 }
 
