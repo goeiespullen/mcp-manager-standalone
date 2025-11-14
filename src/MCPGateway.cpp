@@ -194,6 +194,8 @@ void MCPGateway::handleMessage(QTcpSocket* client, const QJsonObject& message) {
         handleListServers(client, id);
     } else if (method == "tools/call") {
         handleToolCall(client, id, params);
+    } else if (method == "tools/list") {
+        handleToolsList(client, id, params);
     } else {
         sendError(client, id, -32601, "Method not found: " + method);
     }
@@ -361,6 +363,42 @@ void MCPGateway::handleToolCall(QTcpSocket* client, const QJsonValue& id, const 
     mcpRequest["params"] = mcpParams;
 
     LOG_INFO(Logger::Gateway, QString("Forwarding tool call to MCP server: session=%1, tool=%2").arg(sessionId, toolName));
+    session->sendRequest(mcpRequest);
+}
+
+void MCPGateway::handleToolsList(QTcpSocket* client, const QJsonValue& id, const QJsonObject& params) {
+    QString sessionId = params["sessionId"].toString();
+
+    if (sessionId.isEmpty()) {
+        sendError(client, id, -32602, "Missing sessionId parameter");
+        return;
+    }
+
+    MCPSession* session = m_sessions.value(sessionId);
+    if (!session) {
+        sendError(client, id, -32602, "Session not found: " + sessionId);
+        return;
+    }
+
+    // Verify session belongs to this client
+    if (m_sessionClients.value(sessionId) != client) {
+        sendError(client, id, -32603, "Unauthorized: Session belongs to different client");
+        return;
+    }
+
+    if (!session->isActive()) {
+        sendError(client, id, -32603, "Session not active");
+        return;
+    }
+
+    // Forward tools/list request to MCP server
+    QJsonObject mcpRequest;
+    mcpRequest["jsonrpc"] = "2.0";
+    mcpRequest["id"] = id;
+    mcpRequest["method"] = "tools/list";
+    mcpRequest["params"] = QJsonObject();  // tools/list typically has no params
+
+    LOG_INFO(Logger::Gateway, QString("Forwarding tools/list request to session: %1").arg(sessionId));
     session->sendRequest(mcpRequest);
 }
 
