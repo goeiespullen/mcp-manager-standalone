@@ -38,8 +38,6 @@
                 "run",
                 "--rm",
                 "-i",
-                "--env-file",
-                "/home/laptop/MEGA/development/chatns/chatnsbot-standalone/azure-devops-mcp.env",
                 "azuredevops-mcp:latest",
                 "ns-topaas",
                 "--authentication",
@@ -49,6 +47,7 @@
             "command": "docker",
             "description": "Azure DevOps MCP Server (Microsoft Official) - 80+ tools for Boards, Repos, Pipelines, Artifacts, Test Plans, Wiki",
             "env": {
+                "AZDO_ORG": "ns-topaas"
             },
             "githubRepo": "https://github.com/microsoft/azure-devops-mcp",
             "healthCheckInterval": 30000,

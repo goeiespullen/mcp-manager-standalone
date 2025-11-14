@@ -288,6 +288,14 @@ QProcessEnvironment MCPSession::buildEnvironment() const {
         }
     }
 
+    // Azure DevOps: Map AZDO_PAT to ADO_MCP_AUTH_TOKEN for Microsoft MCP server compatibility
+    if (m_serverType == "Azure DevOps") {
+        if (env.contains("AZDO_PAT") && !env.contains("ADO_MCP_AUTH_TOKEN")) {
+            env.insert("ADO_MCP_AUTH_TOKEN", env.value("AZDO_PAT"));
+            qDebug() << "Session" << m_sessionId << "mapped AZDO_PAT to ADO_MCP_AUTH_TOKEN for Microsoft server";
+        }
+    }
+
     // Fallback: If no credentials provided, try to inherit from parent process environment
     // This ensures that servers work even when dashboard doesn't send credentials
     if (m_credentials.isEmpty() || m_credentials.keys().isEmpty()) {
@@ -307,13 +315,22 @@ QProcessEnvironment MCPSession::buildEnvironment() const {
 
         // Azure DevOps credentials
         if (m_serverType == "Azure DevOps") {
-            QStringList azureKeys = {"AZDO_PAT", "AZDO_ORG"};
+            // Microsoft Azure DevOps MCP server uses ADO_MCP_AUTH_TOKEN
+            // Also support legacy AZDO_PAT for backward compatibility
+            QStringList azureKeys = {"AZDO_PAT", "AZDO_ORG", "ADO_MCP_AUTH_TOKEN"};
             for (const QString& key : azureKeys) {
                 QString value = qEnvironmentVariable(key.toUtf8().constData());
                 if (!value.isEmpty() && !env.contains(key)) {
                     env.insert(key, value);
                     qDebug() << "Session" << m_sessionId << "inherited from parent:" << key;
                 }
+            }
+
+            // If AZDO_PAT is set but ADO_MCP_AUTH_TOKEN is not, copy it
+            // This ensures compatibility when dashboard sends AZDO_PAT
+            if (env.contains("AZDO_PAT") && !env.contains("ADO_MCP_AUTH_TOKEN")) {
+                env.insert("ADO_MCP_AUTH_TOKEN", env.value("AZDO_PAT"));
+                qDebug() << "Session" << m_sessionId << "mapped AZDO_PAT to ADO_MCP_AUTH_TOKEN";
             }
         }
 

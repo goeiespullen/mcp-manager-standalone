@@ -31,20 +31,13 @@ cd /home/laptop/MEGA/development/chatns/mcp-manager/docker/azure-devops-mcp
 ./build.sh
 ```
 
-### 2. Configureer credentials
+### 2. Credentials via Dashboard (Aanbevolen)
 
-Bewerk het env file:
-```bash
-# Edit het bestand
-nano /home/laptop/MEGA/development/chatns/chatnsbot-standalone/azure-devops-mcp.env
-```
+**De credentials worden automatisch vanuit het dashboard meegegeven via de gateway!**
 
-Vul je Personal Access Token in:
-```env
-ADO_MCP_AUTH_TOKEN=your-actual-pat-token-here
-```
+Het dashboard stuurt `AZDO_PAT` vanuit de keystore, en de gateway mapped dit automatisch naar `ADO_MCP_AUTH_TOKEN` voor de Microsoft server.
 
-**PAT aanmaken:**
+**PAT aanmaken voor keystore:**
 1. Ga naar: `https://dev.azure.com/ns-topaas/_usersSettings/tokens`
 2. Klik op "New Token"
 3. Selecteer scopes:
@@ -52,11 +45,33 @@ ADO_MCP_AUTH_TOKEN=your-actual-pat-token-here
    - ✅ Work Items (Read, Write)
    - ✅ Build (Read, Execute)
    - ✅ Wiki (Read, Write)
-4. Kopieer de token en plak in het env file
+4. Kopieer de token en sla op in dashboard keystore als `AZDO_PAT`
 
-### 3. Test het Docker image
+**Credential Flow:**
+```
+Dashboard Keystore (AZDO_PAT)
+    ↓
+Gateway Session
+    ↓
+MCPSession.cpp (mapping)
+    ↓
+Docker Container (ADO_MCP_AUTH_TOKEN)
+    ↓
+Microsoft MCP Server
+```
+
+### 3. Alternatief: Lokaal testen zonder Gateway (Optioneel)
+
+Voor lokale tests zonder dashboard kun je een env file gebruiken:
 
 ```bash
+# Optioneel: Maak env file voor lokale tests
+cp azure-devops-mcp.env.example /home/laptop/MEGA/development/chatns/chatnsbot-standalone/azure-devops-mcp.env
+
+# Bewerk en vul PAT in
+nano /home/laptop/MEGA/development/chatns/chatnsbot-standalone/azure-devops-mcp.env
+
+# Test
 docker run --rm -i \
   --env-file /home/laptop/MEGA/development/chatns/chatnsbot-standalone/azure-devops-mcp.env \
   azuredevops-mcp:latest \
@@ -64,7 +79,7 @@ docker run --rm -i \
   --authentication envvar
 ```
 
-Dit start de MCP server die via stdio communiceert.
+**Note:** Dit is NIET nodig voor normale gebruik - de gateway injecteert credentials automatisch!
 
 ### 4. Integratie met MCP Manager
 
@@ -79,15 +94,21 @@ De server is al geconfigureerd in `configs/servers.json`:
     "run",
     "--rm",
     "-i",
-    "--env-file",
-    "/home/laptop/MEGA/development/chatns/chatnsbot-standalone/azure-devops-mcp.env",
     "azuredevops-mcp:latest",
     "ns-topaas",
     "--authentication",
     "envvar"
-  ]
+  ],
+  "env": {
+    "AZDO_ORG": "ns-topaas"
+  }
 }
 ```
+
+**Credentials komen via de gateway:**
+- Dashboard keystore: `AZDO_PAT`
+- Gateway mapping: `AZDO_PAT` → `ADO_MCP_AUTH_TOKEN`
+- Docker container krijgt beide via `-e` flags automatisch
 
 Start de server via de MCP Manager GUI of:
 ```bash
