@@ -125,7 +125,7 @@ private:
     QComboBox* m_serverFilter;
 
     // Gateway status
-    QLabel* m_gatewaySessionLabel;
+    QTableWidget* m_gatewaySessionsTable;
 
     // Tools Browser
     QListWidget* m_toolsServerList;

@@ -25,6 +25,8 @@ public:
         const QString& serverType,
         const QJsonObject& serverConfig,
         const QJsonObject& credentials,
+        const QString& userId,
+        const QString& clientApp,
         QTcpSocket* clientSocket,
         QObject* parent = nullptr
     );
@@ -33,6 +35,8 @@ public:
     // Session info
     QString sessionId() const { return m_sessionId; }
     QString serverType() const { return m_serverType; }
+    QString userId() const { return m_userId; }
+    QString clientApp() const { return m_clientApp; }
     QDateTime created() const { return m_created; }
     QDateTime lastActivity() const { return m_lastActivity; }
     bool isActive() const;
@@ -74,6 +78,8 @@ private:
 
     QString m_sessionId;
     QString m_serverType;
+    QString m_userId;
+    QString m_clientApp;
     QJsonObject m_serverConfig;
     QJsonObject m_credentials;
     QDateTime m_created;

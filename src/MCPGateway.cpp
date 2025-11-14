@@ -205,7 +205,13 @@ void MCPGateway::handleMessage(QTcpSocket* client, const QJsonObject& message) {
 void MCPGateway::handleCreateSession(QTcpSocket* client, const QJsonValue& id, const QJsonObject& params) {
     QString serverType = params["serverType"].toString();
     QString userId = params["userId"].toString();
+    QString clientApp = params["clientApp"].toString();
     QJsonObject credentials = params["credentials"].toObject();
+
+    // Default clientApp if not provided
+    if (clientApp.isEmpty()) {
+        clientApp = "Unknown";
+    }
 
     if (serverType.isEmpty()) {
         sendError(client, id, -32602, "Missing serverType parameter");
@@ -281,6 +287,8 @@ void MCPGateway::handleCreateSession(QTcpSocket* client, const QJsonValue& id, c
         serverType,
         serverConfig,
         credentials,
+        userId,
+        clientApp,
         client,
         this
     );

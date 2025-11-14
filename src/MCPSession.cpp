@@ -8,12 +8,16 @@ MCPSession::MCPSession(
     const QString& serverType,
     const QJsonObject& serverConfig,
     const QJsonObject& credentials,
+    const QString& userId,
+    const QString& clientApp,
     QTcpSocket* clientSocket,
     QObject* parent
 )
     : QObject(parent)
     , m_sessionId(sessionId)
     , m_serverType(serverType)
+    , m_userId(userId)
+    , m_clientApp(clientApp)
     , m_serverConfig(serverConfig)
     , m_credentials(credentials)
     , m_created(QDateTime::currentDateTime())
@@ -24,7 +28,8 @@ MCPSession::MCPSession(
     , m_initialized(false)
     , m_initRequestId(999)
 {
-    qDebug() << "MCPSession created:" << m_sessionId << "for" << m_serverType;
+    qDebug() << "MCPSession created:" << m_sessionId << "for" << m_serverType
+             << "user:" << m_userId << "app:" << m_clientApp;
 
     // Connect process signals
     connect(m_process, &QProcess::started, this, &MCPSession::onProcessStarted);

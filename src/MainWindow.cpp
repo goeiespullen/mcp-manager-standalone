@@ -154,10 +154,22 @@ QWidget* MainWindow::createGatewayTab() {
     QVBoxLayout* statusLayout = new QVBoxLayout(statusGroup);
 
     QLabel* portLabel = new QLabel(QString("Listening on: <b>localhost:8700</b>"));
-    m_gatewaySessionLabel = new QLabel("Active sessions: <b>0</b>");
-
     statusLayout->addWidget(portLabel);
-    statusLayout->addWidget(m_gatewaySessionLabel);
+
+    // Active sessions table
+    m_gatewaySessionsTable = new QTableWidget();
+    m_gatewaySessionsTable->setColumnCount(6);
+    m_gatewaySessionsTable->setHorizontalHeaderLabels({
+        "Session ID", "User", "Client App", "Server Type", "Created", "Last Activity"
+    });
+    m_gatewaySessionsTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_gatewaySessionsTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_gatewaySessionsTable->horizontalHeader()->setStretchLastSection(true);
+    m_gatewaySessionsTable->setMinimumHeight(150);
+    m_gatewaySessionsTable->setMaximumHeight(300);
+
+    statusLayout->addWidget(new QLabel("<b>Active Sessions:</b>"));
+    statusLayout->addWidget(m_gatewaySessionsTable);
 
     layout->addWidget(statusGroup);
 
@@ -2767,10 +2779,65 @@ void MainWindow::showMarkdownDialog(const QString& title, const QString& filePat
 }
 
 void MainWindow::updateGatewayStatus() {
-    if (m_gateway && m_gatewaySessionLabel) {
-        int sessionCount = m_gateway->activeSessionCount();
-        m_gatewaySessionLabel->setText(QString("Active sessions: <b>%1</b>").arg(sessionCount));
+    if (!m_gateway || !m_gatewaySessionsTable) {
+        return;
     }
+
+    // Get all active sessions
+    QStringList sessionIds = m_gateway->activeSessions();
+
+    // Update table row count
+    m_gatewaySessionsTable->setRowCount(sessionIds.size());
+
+    // Populate table with session details
+    for (int i = 0; i < sessionIds.size(); ++i) {
+        const QString& sessionId = sessionIds[i];
+
+        // Get session from gateway (need to add accessor method)
+        // For now, we'll populate with sessionId and extract info from sessions map
+        const auto& sessions = m_gateway->findChildren<MCPSession*>();
+        MCPSession* session = nullptr;
+
+        for (MCPSession* s : sessions) {
+            if (s->sessionId() == sessionId) {
+                session = s;
+                break;
+            }
+        }
+
+        if (!session) {
+            continue;
+        }
+
+        // Column 0: Session ID
+        m_gatewaySessionsTable->setItem(i, 0, new QTableWidgetItem(session->sessionId()));
+
+        // Column 1: User
+        QString userId = session->userId();
+        if (userId.isEmpty()) {
+            userId = "(legacy)";
+        }
+        m_gatewaySessionsTable->setItem(i, 1, new QTableWidgetItem(userId));
+
+        // Column 2: Client App
+        m_gatewaySessionsTable->setItem(i, 2, new QTableWidgetItem(session->clientApp()));
+
+        // Column 3: Server Type
+        m_gatewaySessionsTable->setItem(i, 3, new QTableWidgetItem(session->serverType()));
+
+        // Column 4: Created
+        m_gatewaySessionsTable->setItem(i, 4, new QTableWidgetItem(
+            session->created().toString("yyyy-MM-dd HH:mm:ss")
+        ));
+
+        // Column 5: Last Activity
+        m_gatewaySessionsTable->setItem(i, 5, new QTableWidgetItem(
+            session->lastActivity().toString("yyyy-MM-dd HH:mm:ss")
+        ));
+    }
+
+    // Auto-resize columns to content
+    m_gatewaySessionsTable->resizeColumnsToContents();
 }
 
 void MainWindow::onManageToolsClicked() {
