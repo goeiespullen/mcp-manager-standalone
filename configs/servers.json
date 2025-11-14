@@ -47,10 +47,11 @@
             "healthCheckInterval": 30000,
             "name": "Azure DevOps",
             "permissions": {
-                "EXECUTE_AI": true,
-                "EXECUTE_CODE": true,
-                "WRITE_LOCAL": true,
-                "WRITE_REMOTE": true
+                "EXECUTE_AI": false,
+                "EXECUTE_CODE": false,
+                "READ_REMOTE": false,
+                "WRITE_LOCAL": false,
+                "WRITE_REMOTE": false
             },
             "port": 8765,
             "type": "python",
