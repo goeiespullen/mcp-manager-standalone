@@ -100,11 +100,13 @@ MainWindow::MainWindow(MCPServerManager* manager, QWidget* parent)
     // Status update timer
     QTimer* statusTimer = new QTimer(this);
     connect(statusTimer, &QTimer::timeout, this, &MainWindow::updateStatusBar);
+    connect(statusTimer, &QTimer::timeout, this, &MainWindow::updateGatewayStatus);
     statusTimer->start(1000);
 
     // Initial population
     populateServerTable();
     updateStatusBar();
+    updateGatewayStatus();
 }
 
 MainWindow::~MainWindow() {
