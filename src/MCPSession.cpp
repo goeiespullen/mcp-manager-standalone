@@ -85,11 +85,11 @@ bool MCPSession::startServer() {
         qDebug() << "  AZDO_ORG:" << env.value("AZDO_ORG", "NOT SET");
     }
 
-    // For Docker containers, inject environment variables as -e flags
-    // Docker doesn't inherit QProcessEnvironment, so we must pass them via command line
+    // For Docker containers, inject credentials as -e flags
+    // Docker doesn't inherit QProcessEnvironment, so we must pass credentials via -e
     QString serverType = m_serverConfig["type"].toString();
     if (serverType == "docker" && command == "docker") {
-        qDebug() << "Session" << m_sessionId << "injecting environment variables for Docker container";
+        qDebug() << "Session" << m_sessionId << "injecting credentials for Docker container";
 
         // Find position to insert -e flags (after "run" but before image name)
         // Typical: ["run", "--rm", "-i", "image:tag", ...]
@@ -98,10 +98,36 @@ bool MCPSession::startServer() {
             insertPos++;
         }
 
-        // Insert all environment variables as -e flags
-        QStringList envKeys = env.keys();
+        // Build list of credential keys to inject
+        QStringList credentialKeys;
+
+        // Add session credentials
+        for (auto it = m_credentials.begin(); it != m_credentials.end(); ++it) {
+            if (!it.value().toString().isEmpty()) {
+                credentialKeys.append(it.key());
+            }
+        }
+
+        // Add config env vars
+        QJsonObject configEnv = m_serverConfig["env"].toObject();
+        for (auto it = configEnv.begin(); it != configEnv.end(); ++it) {
+            QString key = it.key();
+            if (!credentialKeys.contains(key)) {
+                credentialKeys.append(key);
+            }
+        }
+
+        // Also add any mapped credentials (e.g., AZDO_PAT -> ADO_MCP_AUTH_TOKEN)
+        // For Azure DevOps, ensure ADO_MCP_AUTH_TOKEN is included
+        if (m_serverType == "Azure DevOps" && env.contains("ADO_MCP_AUTH_TOKEN")) {
+            if (!credentialKeys.contains("ADO_MCP_AUTH_TOKEN")) {
+                credentialKeys.append("ADO_MCP_AUTH_TOKEN");
+            }
+        }
+
+        // Insert credentials as -e flags
         int envCount = 0;
-        for (const QString& key : envKeys) {
+        for (const QString& key : credentialKeys) {
             QString value = env.value(key);
             if (!value.isEmpty()) {
                 args.insert(insertPos++, "-e");
@@ -111,7 +137,7 @@ bool MCPSession::startServer() {
             }
         }
 
-        qDebug() << "Session" << m_sessionId << "added" << envCount << "environment variables to Docker command";
+        qDebug() << "Session" << m_sessionId << "added" << envCount << "credentials to Docker command";
     } else {
         // For non-Docker servers, use normal QProcessEnvironment
         m_process->setProcessEnvironment(env);
