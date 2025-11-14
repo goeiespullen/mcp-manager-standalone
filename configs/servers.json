@@ -35,25 +35,30 @@
         },
         {
             "arguments": [
-                "mcp_servers/devops_server.py"
+                "run",
+                "--rm",
+                "-i",
+                "--env-file",
+                "/home/laptop/MEGA/development/chatns/chatnsbot-standalone/azure-devops-mcp.env",
+                "azuredevops-mcp:latest",
+                "ns-topaas",
+                "--authentication",
+                "envvar"
             ],
             "autostart": false,
-            "command": "/home/laptop/MEGA/development/chatns/chatns_summerschool/.venv/bin/python",
-            "description": "Azure DevOps MCP Server - Manage work items, sprints, teams",
+            "command": "docker",
+            "description": "Azure DevOps MCP Server (Microsoft Official) - 80+ tools for Boards, Repos, Pipelines, Artifacts, Test Plans, Wiki",
             "env": {
-                "AZDO_ORG": "ns-topaas"
             },
             "githubRepo": "https://github.com/microsoft/azure-devops-mcp",
             "healthCheckInterval": 30000,
             "name": "Azure DevOps",
             "permissions": {
-                "EXECUTE_AI": true,
-                "EXECUTE_CODE": true,
                 "WRITE_LOCAL": true,
                 "WRITE_REMOTE": true
             },
             "port": 8765,
-            "type": "python",
+            "type": "docker",
             "workingDir": "/home/laptop/MEGA/development/chatns/mcp-manager"
         },
         {
