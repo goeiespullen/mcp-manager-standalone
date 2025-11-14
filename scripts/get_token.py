@@ -35,6 +35,10 @@ def get_token(user_id: str, system: str) -> str:
     """
     Get token for user from encrypted keystore.
 
+    Priority order:
+    1. Shared dashboard keystore (for backwards compatibility)
+    2. Per-user keystore in keystores/
+
     Args:
         user_id: User email address
         system: System name (azure, confluence, chatns, etc.)
@@ -45,18 +49,31 @@ def get_token(user_id: str, system: str) -> str:
     Raises:
         SystemExit: On any error (exit code 1)
     """
-    # Determine keystores directory (relative to script location)
     script_dir = Path(__file__).parent
+
+    # Option 1: Try shared dashboard keystore first (PRIORITY)
+    dashboard_keystore = script_dir.parent.parent / "chatns_summerschool" / "dashapp" / ".keystore"
+    dashboard_key = script_dir.parent.parent / "chatns_summerschool" / "dashapp" / ".keystore.key"
+
+    # Option 2: Per-user keystore
     keystores_dir = script_dir.parent / "keystores"
+    user_keystore = keystores_dir / f"{user_id}.keystore"
+    user_key = keystores_dir / f"{user_id}.key"
 
-    # Find user's keystore
-    keystore_path = keystores_dir / f"{user_id}.keystore"
-    keystore_key_path = keystores_dir / f"{user_id}.key"
-
-    if not keystore_path.exists():
+    # Try shared keystore first (backwards compatible)
+    if dashboard_keystore.exists() and dashboard_key.exists():
+        keystore_path = dashboard_keystore
+        keystore_key_path = dashboard_key
+    # Fallback to per-user keystore
+    elif user_keystore.exists():
+        keystore_path = user_keystore
+        keystore_key_path = user_key
+    else:
         print(f"ERROR: No keystore found for user: {user_id}", file=sys.stderr)
-        print(f"Expected location: {keystore_path}", file=sys.stderr)
-        print(f"Hint: Register tokens using register_token.py first", file=sys.stderr)
+        print(f"Tried locations:", file=sys.stderr)
+        print(f"  1. Shared: {dashboard_keystore}", file=sys.stderr)
+        print(f"  2. Per-user: {user_keystore}", file=sys.stderr)
+        print(f"Hint: Credentials should be in the dashboard keystore", file=sys.stderr)
         sys.exit(1)
 
     # Load keystore
