@@ -144,5 +144,19 @@ if __name__ == "__main__":
     if "@" not in user_id:
         print(f"WARNING: user_id '{user_id}' doesn't look like an email", file=sys.stderr)
 
+    # Normalize system name (handle display names from MCP Manager GUI)
+    # Map display names to keystore service names
+    system_mapping = {
+        "Azure DevOps": "azure",
+        "azure devops": "azure",
+        "TeamCentraal": "teamcentraal",
+        "team centraal": "teamcentraal",
+        "Confluence": "confluence",
+        "ChatNS": "chatns",
+    }
+
+    # Apply mapping if exists, otherwise use lowercase version
+    system = system_mapping.get(system, system.lower())
+
     # Get and output token
     get_token(user_id, system)
