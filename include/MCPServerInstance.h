@@ -147,6 +147,7 @@ private:
     QList<ToolInfo> m_tools;  // Available tools from this server
     bool m_initialized;  // Track if MCP initialization handshake is complete
     bool m_pendingToolsRefresh;  // Track if we need to refresh tools after initialization
+    QString m_jsonBuffer;  // Buffer for incomplete JSON responses (for large tools/list)
 
     // Permissions
     QMap<PermissionCategory, bool> m_permissions;  // Explicit permission overrides for this server

@@ -213,6 +213,18 @@ void MCPServerInstance::onProcessStarted() {
     m_restartCount = 0; // Reset restart counter on successful start
     startHealthMonitoring();
     emit started();
+
+    // Automatically refresh tools for Docker servers after a short delay
+    // This allows the container to initialize before we query tools
+    if (m_type == "docker") {
+        qDebug() << "Scheduling automatic tools refresh for Docker server" << m_name;
+        QTimer::singleShot(3000, this, [this]() {
+            if (isRunning()) {
+                qDebug() << "Auto-refreshing tools for" << m_name;
+                refreshTools();
+            }
+        });
+    }
 }
 
 void MCPServerInstance::onProcessFinished(int exitCode, QProcess::ExitStatus exitStatus) {
@@ -288,66 +300,82 @@ void MCPServerInstance::onProcessError(QProcess::ProcessError error) {
 
 void MCPServerInstance::onReadyReadStandardOutput() {
     QByteArray data = m_process->readAllStandardOutput();
-    QString output = QString::fromUtf8(data).trimmed();
+    QString output = QString::fromUtf8(data);
 
     if (output.isEmpty()) return;
 
-    // Split into lines and add to buffer
-    QStringList lines = output.split('\n');
+    // Add to JSON buffer for handling large responses
+    m_jsonBuffer += output;
+
+    // Try to extract complete JSON objects (split by newlines)
+    QStringList lines = m_jsonBuffer.split('\n');
+
+    // Keep the last (potentially incomplete) line in the buffer
+    if (!m_jsonBuffer.endsWith('\n')) {
+        m_jsonBuffer = lines.last();
+        lines.removeLast();
+    } else {
+        m_jsonBuffer.clear();
+    }
+
+    // Process complete lines
     for (const QString& line : lines) {
         QString trimmedLine = line.trimmed();
-        if (!trimmedLine.isEmpty()) {
-            m_outputBuffer.append(trimmedLine);
+        if (trimmedLine.isEmpty()) continue;
 
-            // Keep buffer size limited
-            if (m_outputBuffer.size() > m_maxOutputLines) {
-                m_outputBuffer.removeFirst();
-            }
+        m_outputBuffer.append(trimmedLine);
 
-            // Try to parse as JSON-RPC response
-            if (trimmedLine.startsWith('{')) {
-                QJsonParseError parseError;
-                QJsonDocument doc = QJsonDocument::fromJson(trimmedLine.toUtf8(), &parseError);
+        // Keep buffer size limited
+        if (m_outputBuffer.size() > m_maxOutputLines) {
+            m_outputBuffer.removeFirst();
+        }
 
-                if (parseError.error == QJsonParseError::NoError && doc.isObject()) {
-                    QJsonObject obj = doc.object();
+        // Try to parse as JSON-RPC response
+        if (trimmedLine.startsWith('{')) {
+            QJsonParseError parseError;
+            QJsonDocument doc = QJsonDocument::fromJson(trimmedLine.toUtf8(), &parseError);
 
-                    // Check if this is an initialize response (id = 1)
-                    if (obj.contains("id") && obj["id"].toInt() == 1 && obj.contains("result")) {
-                        qDebug() << "Received initialize response for" << m_name;
-                        m_initialized = true;
+            if (parseError.error == QJsonParseError::NoError && doc.isObject()) {
+                QJsonObject obj = doc.object();
 
-                        // Send initialized notification (no id, it's a notification)
-                        QJsonObject notification;
-                        notification["jsonrpc"] = "2.0";
-                        notification["method"] = "notifications/initialized";
+                // Check if this is an initialize response (id = 1)
+                if (obj.contains("id") && obj["id"].toInt() == 1 && obj.contains("result")) {
+                    qDebug() << "=== Received initialize response for" << m_name << "===";
+                    qDebug() << "    Response:" << QJsonDocument(obj).toJson(QJsonDocument::Compact);
+                    m_initialized = true;
 
-                        QJsonDocument notifDoc(notification);
-                        QByteArray notifData = notifDoc.toJson(QJsonDocument::Compact) + "\n";
-                        m_process->write(notifData);
-                        m_process->waitForBytesWritten(1000);
-                        qDebug() << "Sent initialized notification to" << m_name;
+                    // Send initialized notification (no id, it's a notification)
+                    QJsonObject notification;
+                    notification["jsonrpc"] = "2.0";
+                    notification["method"] = "notifications/initialized";
 
-                        // If we have a pending tools refresh, do it now
-                        if (m_pendingToolsRefresh) {
-                            m_pendingToolsRefresh = false;
-                            qDebug() << "Proceeding with pending tools refresh";
-                            refreshTools();  // This will now send tools/list since m_initialized = true
-                        }
+                    QJsonDocument notifDoc(notification);
+                    QByteArray notifData = notifDoc.toJson(QJsonDocument::Compact) + "\n";
+                    m_process->write(notifData);
+                    m_process->waitForBytesWritten(1000);
+                    qDebug() << "Sent initialized notification to" << m_name;
 
-                        continue;  // Don't emit as regular output
+                    // If we have a pending tools refresh, do it now
+                    if (m_pendingToolsRefresh) {
+                        m_pendingToolsRefresh = false;
+                        qDebug() << "Proceeding with pending tools refresh";
+                        refreshTools();  // This will now send tools/list since m_initialized = true
                     }
 
-                    // Check if this is a tools/list response (id = 999)
-                    if (obj.contains("id") && obj["id"].toInt() == 999 && obj.contains("result")) {
-                        parseToolsListResponse(obj);
-                        continue;  // Don't emit as regular output
-                    }
+                    continue;  // Don't emit as regular output
+                }
+
+                // Check if this is a tools/list response (id = 999)
+                if (obj.contains("id") && obj["id"].toInt() == 999 && obj.contains("result")) {
+                    qDebug() << "=== Received tools/list response for" << m_name << "===";
+                    qDebug() << "    Parsing" << obj["result"].toObject()["tools"].toArray().size() << "tools";
+                    parseToolsListResponse(obj);
+                    continue;  // Don't emit as regular output
                 }
             }
-
-            emit outputReceived(trimmedLine);
         }
+
+        emit outputReceived(trimmedLine);
     }
 }
 
@@ -428,7 +456,10 @@ void MCPServerInstance::refreshTools() {
         return;
     }
 
-    qDebug() << "Refreshing tools for" << m_name;
+    qDebug() << "=== Refreshing tools for" << m_name << "===";
+    qDebug() << "    Server type:" << m_type;
+    qDebug() << "    Initialized:" << m_initialized;
+    qDebug() << "    Pending refresh:" << m_pendingToolsRefresh;
 
     // Check if we need to initialize first
     if (!m_initialized) {

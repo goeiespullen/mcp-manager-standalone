@@ -463,8 +463,14 @@ QWidget* MainWindow::createToolsBrowserTab() {
             }
         });
 
-        // Setup timeout handler (5 seconds)
-        connect(timeoutTimer, &QTimer::timeout, [this, conn, serverName]() {
+        // Determine timeout based on server type
+        // Docker containers need time for: MCP initialize handshake + tools/list request
+        // Manual tests show this completes in ~3 seconds, so 10 seconds is safe
+        int timeoutMs = (server->type() == "docker") ? 10000 : 5000;
+        QString timeoutDesc = (server->type() == "docker") ? "10 seconds" : "5 seconds";
+
+        // Setup timeout handler
+        connect(timeoutTimer, &QTimer::timeout, [this, conn, serverName, timeoutDesc]() {
             // Disconnect the signal connection
             QObject::disconnect(*conn);
             delete conn;
@@ -472,17 +478,17 @@ QWidget* MainWindow::createToolsBrowserTab() {
             // Show timeout error
             m_toolDetailsDisplay->setPlainText(QString(
                 "⚠️ Timeout querying tools from %1\n\n"
-                "The server did not respond within 5 seconds.\n\n"
+                "The server did not respond within %2.\n\n"
                 "Possible causes:\n"
                 "• Server is still initializing\n"
                 "• Server doesn't support tools/list method\n"
                 "• Server is not responding to stdin\n\n"
                 "Try again in a few seconds, or check the Logs tab for errors."
-            ).arg(serverName));
+            ).arg(serverName).arg(timeoutDesc));
         });
 
         // Start timeout timer
-        timeoutTimer->start(5000);
+        timeoutTimer->start(timeoutMs);
 
         // Request tools refresh from server
         server->refreshTools();
@@ -1120,21 +1126,27 @@ QWidget* MainWindow::createToolsAndPermissionsTab() {
             }
         });
 
-        connect(timeoutTimer, &QTimer::timeout, [this, conn, serverName]() {
+        // Determine timeout based on server type
+        // Docker containers need time for: MCP initialize handshake + tools/list request
+        // Manual tests show this completes in ~3 seconds, so 10 seconds is safe
+        int timeoutMs = (server->type() == "docker") ? 10000 : 5000;
+        QString timeoutDesc = (server->type() == "docker") ? "10 seconds" : "5 seconds";
+
+        connect(timeoutTimer, &QTimer::timeout, [this, conn, serverName, timeoutDesc]() {
             QObject::disconnect(*conn);
             delete conn;
             m_toolDetailsDisplay->setPlainText(QString(
                 "⚠️ Timeout querying tools from %1\n\n"
-                "The server did not respond within 5 seconds.\n\n"
+                "The server did not respond within %2.\n\n"
                 "Possible causes:\n"
                 "• Server is still initializing\n"
                 "• Server doesn't support tools/list method\n"
                 "• Server is not responding to stdin\n\n"
                 "Try again in a few seconds, or check the Logs tab for errors."
-            ).arg(serverName));
+            ).arg(serverName).arg(timeoutDesc));
         });
 
-        timeoutTimer->start(5000);
+        timeoutTimer->start(timeoutMs);
         server->refreshTools();
     });
     toolsToolbarLayout->addWidget(m_refreshToolsButton);

@@ -53,8 +53,9 @@
             "healthCheckInterval": 30000,
             "name": "Azure DevOps",
             "permissions": {
+                "EXECUTE_AI": true,
                 "WRITE_LOCAL": true,
-                "WRITE_REMOTE": true
+                "WRITE_REMOTE": false
             },
             "port": 8765,
             "type": "docker",

@@ -77,6 +77,14 @@ bool MCPSession::startServer() {
     // Build environment with credentials
     QProcessEnvironment env = buildEnvironment();
 
+    // Debug: Show environment variables for Azure DevOps
+    if (m_serverType == "Azure DevOps") {
+        qDebug() << "Session" << m_sessionId << "Azure DevOps environment:";
+        qDebug() << "  AZDO_PAT:" << (env.contains("AZDO_PAT") ? "SET" : "NOT SET");
+        qDebug() << "  ADO_MCP_AUTH_TOKEN:" << (env.contains("ADO_MCP_AUTH_TOKEN") ? "SET" : "NOT SET");
+        qDebug() << "  AZDO_ORG:" << env.value("AZDO_ORG", "NOT SET");
+    }
+
     // Set working directory if specified
     QString workingDir = m_serverConfig["workingDir"].toString();
     if (!workingDir.isEmpty()) {
