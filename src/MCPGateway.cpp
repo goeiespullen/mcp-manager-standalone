@@ -5,6 +5,9 @@
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QUuid>
+#include <QProcess>
+#include <QDir>
+#include <QFile>
 
 MCPGateway::MCPGateway(MCPServerManager* serverManager, QObject* parent)
     : QObject(parent)
@@ -201,10 +204,56 @@ void MCPGateway::handleMessage(QTcpSocket* client, const QJsonObject& message) {
 
 void MCPGateway::handleCreateSession(QTcpSocket* client, const QJsonValue& id, const QJsonObject& params) {
     QString serverType = params["serverType"].toString();
+    QString userId = params["userId"].toString();
     QJsonObject credentials = params["credentials"].toObject();
 
     if (serverType.isEmpty()) {
         sendError(client, id, -32602, "Missing serverType parameter");
+        return;
+    }
+
+    // USER-BASED AUTHENTICATION: If userId is provided, lookup token from keystore
+    if (!userId.isEmpty()) {
+        qDebug() << "User-based authentication: userId =" << userId;
+        LOG_INFO(Logger::Gateway,
+                QString("Creating session for user %1, server %2")
+                .arg(userId).arg(serverType));
+
+        // Get token from encrypted keystore via Python helper
+        QString token = getTokenForUser(userId, serverType);
+
+        if (token.isEmpty()) {
+            sendError(client, id, -32001,
+                     QString("No credentials found for user %1, system %2. "
+                            "Please register credentials using register_token.py")
+                     .arg(userId).arg(serverType));
+            return;
+        }
+
+        // Build credentials object based on server type
+        credentials = QJsonObject();
+        if (serverType == "azure" || serverType == "Azure DevOps") {
+            credentials["pat"] = token;
+        } else if (serverType == "confluence" || serverType == "Atlassian") {
+            credentials["token"] = token;
+        } else {
+            // Generic fallback
+            credentials["token"] = token;
+        }
+
+        qDebug() << "User credentials loaded for" << userId << "- server type:" << serverType;
+    }
+    // LEGACY: credentials object provided directly (backward compatible)
+    else if (!credentials.isEmpty()) {
+        qDebug() << "Legacy authentication: using provided credentials";
+        LOG_WARNING(Logger::Gateway,
+                   QString("Session created using legacy credentials (no userId) for server %1")
+                   .arg(serverType));
+    }
+    // ERROR: neither userId nor credentials provided
+    else {
+        sendError(client, id, -32602,
+                 "Missing authentication: provide either 'userId' or 'credentials' parameter");
         return;
     }
 
@@ -574,4 +623,75 @@ void MCPGateway::onGlobalPermissionsChanged() {
     if (!sessionIds.isEmpty()) {
         qDebug() << "Destroyed" << sessionIds.size() << "total session(s) due to global permission change";
     }
+}
+
+QString MCPGateway::getTokenForUser(const QString& userId, const QString& system) {
+    /**
+     * Get credential token for user by calling Python helper script.
+     *
+     * This method calls scripts/get_token.py which:
+     * - Loads the user's encrypted keystore
+     * - Retrieves the token for the specified system
+     * - Returns token via stdout
+     *
+     * @param userId User email address (e.g., "user@ns.nl")
+     * @param system System name (e.g., "azure", "confluence")
+     * @return Token string, or empty string if not found or error
+     */
+
+    // Build path to get_token.py script
+    QString scriptPath = QDir::currentPath() + "/scripts/get_token.py";
+
+    // Validate script exists
+    if (!QFile::exists(scriptPath)) {
+        qWarning() << "Token lookup script not found:" << scriptPath;
+        LOG_ERROR(Logger::Gateway, QString("Token script not found: %1").arg(scriptPath));
+        return QString();
+    }
+
+    // Prepare process to call Python script
+    QProcess process;
+    QStringList args;
+    args << scriptPath << userId << system;
+
+    qDebug() << "Looking up token for user:" << userId << "system:" << system;
+
+    // Execute script with timeout
+    process.start("python3", args);
+    if (!process.waitForFinished(5000)) {  // 5 second timeout
+        qWarning() << "Token lookup timeout for user:" << userId;
+        LOG_ERROR(Logger::Gateway,
+                 QString("Token lookup timeout for user %1, system %2")
+                 .arg(userId).arg(system));
+        process.kill();
+        return QString();
+    }
+
+    // Check exit code
+    if (process.exitCode() != 0) {
+        QString errorMsg = QString::fromUtf8(process.readAllStandardError()).trimmed();
+        qWarning() << "Token lookup failed:" << errorMsg;
+        LOG_ERROR(Logger::Gateway,
+                 QString("Token lookup failed for user %1, system %2: %3")
+                 .arg(userId).arg(system).arg(errorMsg));
+        return QString();
+    }
+
+    // Read token from stdout
+    QString token = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+
+    if (token.isEmpty()) {
+        qWarning() << "Empty token returned for user:" << userId << "system:" << system;
+        LOG_WARNING(Logger::Gateway,
+                   QString("Empty token for user %1, system %2")
+                   .arg(userId).arg(system));
+        return QString();
+    }
+
+    qDebug() << "Token retrieved successfully for user:" << userId << "system:" << system;
+    LOG_INFO(Logger::Gateway,
+            QString("Token retrieved for user %1, system %2")
+            .arg(userId).arg(system));
+
+    return token;
 }

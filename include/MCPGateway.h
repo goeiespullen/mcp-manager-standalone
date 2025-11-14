@@ -73,6 +73,9 @@ private:
     MCPSession* findSessionByClient(QTcpSocket* client) const;
     void cleanupSession(const QString& sessionId);
 
+    // User credential helpers
+    QString getTokenForUser(const QString& userId, const QString& system);
+
     QTcpServer* m_server;
     MCPServerManager* m_serverManager;
     quint16 m_port;
