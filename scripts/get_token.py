@@ -51,17 +51,25 @@ def get_token(user_id: str, system: str) -> str:
     """
     script_dir = Path(__file__).parent
 
-    # Option 1: Try shared dashboard keystore first (PRIORITY)
+    # Option 1: Central shared keystore (PRIORITY)
+    central_keystore = script_dir.parent.parent / ".keystore"
+    central_key = script_dir.parent.parent / ".keystore.key"
+
+    # Option 2: Legacy dashboard keystore (backwards compatible)
     dashboard_keystore = script_dir.parent.parent / "chatns_summerschool" / "dashapp" / ".keystore"
     dashboard_key = script_dir.parent.parent / "chatns_summerschool" / "dashapp" / ".keystore.key"
 
-    # Option 2: Per-user keystore
+    # Option 3: Per-user keystore
     keystores_dir = script_dir.parent / "keystores"
     user_keystore = keystores_dir / f"{user_id}.keystore"
     user_key = keystores_dir / f"{user_id}.key"
 
-    # Try shared keystore first (backwards compatible)
-    if dashboard_keystore.exists() and dashboard_key.exists():
+    # Try central keystore first (PRIORITY)
+    if central_keystore.exists() and central_key.exists():
+        keystore_path = central_keystore
+        keystore_key_path = central_key
+    # Fallback to legacy dashboard keystore
+    elif dashboard_keystore.exists() and dashboard_key.exists():
         keystore_path = dashboard_keystore
         keystore_key_path = dashboard_key
     # Fallback to per-user keystore
@@ -71,9 +79,10 @@ def get_token(user_id: str, system: str) -> str:
     else:
         print(f"ERROR: No keystore found for user: {user_id}", file=sys.stderr)
         print(f"Tried locations:", file=sys.stderr)
-        print(f"  1. Shared: {dashboard_keystore}", file=sys.stderr)
-        print(f"  2. Per-user: {user_keystore}", file=sys.stderr)
-        print(f"Hint: Credentials should be in the dashboard keystore", file=sys.stderr)
+        print(f"  1. Central: {central_keystore}", file=sys.stderr)
+        print(f"  2. Dashboard: {dashboard_keystore}", file=sys.stderr)
+        print(f"  3. Per-user: {user_keystore}", file=sys.stderr)
+        print(f"Hint: Run register_token.py to create credentials", file=sys.stderr)
         sys.exit(1)
 
     # Load keystore
@@ -152,6 +161,8 @@ if __name__ == "__main__":
         "TeamCentraal": "teamcentraal",
         "team centraal": "teamcentraal",
         "Confluence": "confluence",
+        "Atlassian": "confluence",
+        "atlassian": "confluence",
         "ChatNS": "chatns",
     }
 

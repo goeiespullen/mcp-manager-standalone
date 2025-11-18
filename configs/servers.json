@@ -1,11 +1,11 @@
 {
     "permissions": {
         "global_defaults": {
-            "EXECUTE_AI": false,
-            "EXECUTE_CODE": false,
+            "EXECUTE_AI": true,
+            "EXECUTE_CODE": true,
             "READ_REMOTE": true,
-            "WRITE_LOCAL": false,
-            "WRITE_REMOTE": false
+            "WRITE_LOCAL": true,
+            "WRITE_REMOTE": true
         }
     },
     "servers": [
@@ -27,7 +27,8 @@
             "healthCheckInterval": 30000,
             "name": "Atlassian",
             "permissions": {
-                "WRITE_LOCAL": false
+                "WRITE_LOCAL": false,
+                "WRITE_REMOTE": false
             },
             "port": 8771,
             "type": "docker",
@@ -87,7 +88,9 @@
             "command": "/home/laptop/MEGA/development/chatns/chatns_summerschool/.venv/bin/python",
             "description": "TeamCentraal MCP Server - NS Team registry OData API access",
             "env": {
-                "TEAMCENTRAAL_URL": "https://teamcentraal.ns.nl/odata/POS_Odata_v4"
+                "TEAMCENTRAAL_URL": "https://teamcentraal.ns.nl/odata/POS_Odata_v4",
+                "TEAMCENTRAAL_USERNAME": "DIAScrumEvents",
+                "TEAMCENTRAAL_PASSWORD": "7TLQDQTH0'3\"9gMm53Y'.9AAjHcu58pc"
             },
             "githubRepo": "https://github.com/ns-topaas/teamcentraal-mcp",
             "healthCheckInterval": 30000,
