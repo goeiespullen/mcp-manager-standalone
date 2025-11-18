@@ -3,6 +3,7 @@
 #include "MCPServerInstance.h"
 #include "MCPGateway.h"
 #include "TrafficMonitor.h"
+#include "CredentialsTab.h"
 #include "UpdateChecker.h"
 #include "UpdateDialog.h"
 #include "Version.h"
@@ -123,6 +124,7 @@ void MainWindow::setupUI() {
     m_tabWidget = new QTabWidget();
     m_tabWidget->addTab(createServersTab(), "Servers");
     m_tabWidget->addTab(createToolsAndPermissionsTab(), "🔧 Tools & Permissions");
+    m_tabWidget->addTab(new CredentialsTab(), "🔐 Credentials");
     m_tabWidget->addTab(createApiTesterTab(), "API Tester");
     m_tabWidget->addTab(createGatewayTab(), "Gateway (Port 8700)");
     m_tabWidget->addTab(createLogsTab(), "Logs");

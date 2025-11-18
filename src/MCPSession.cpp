@@ -371,3 +371,20 @@ void MCPSession::initializeServerProtocol() {
     qDebug() << "Session" << m_sessionId << "sending MCP initialize request";
     sendRequest(initRequest);
 }
+
+// ========== Permission Methods ==========
+
+void MCPSession::setPermissions(const QSet<QString>& permissions) {
+    m_permissions = permissions;
+    qDebug() << "Session" << m_sessionId << "permissions set:" << m_permissions;
+}
+
+bool MCPSession::hasPermission(const QString& toolName) const {
+    // Empty permissions set = allow all (backward compatibility)
+    if (m_permissions.isEmpty()) {
+        return true;
+    }
+
+    // Check if tool is in allowed set
+    return m_permissions.contains(toolName);
+}

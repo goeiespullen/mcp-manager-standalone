@@ -397,6 +397,13 @@ void MCPGateway::handleToolCall(QTcpSocket* client, const QJsonValue& id, const 
         return;
     }
 
+    // Check user-level permissions
+    if (!session->hasPermission(toolName)) {
+        sendError(client, id, -32004, QString("Tool '%1' blocked: user '%2' does not have permission").arg(toolName, session->userId()));
+        LOG_WARNING(Logger::Gateway, QString("Tool call blocked: user %1 lacks permission for tool %2").arg(session->userId(), toolName));
+        return;
+    }
+
     // Check tool permissions
     if (server && !server->checkToolPermissions(toolName)) {
         sendError(client, id, -32003, QString("Tool '%1' blocked: insufficient permissions for server '%2'").arg(toolName, serverType));

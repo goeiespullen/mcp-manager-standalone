@@ -7,6 +7,7 @@
 #include <QTcpSocket>
 #include <QJsonObject>
 #include <QMap>
+#include <QSet>
 
 /**
  * @brief Represents a client session with an MCP server
@@ -57,6 +58,11 @@ public:
     int requestCount() const { return m_requestCount; }
     QString lastError() const { return m_lastError; }
 
+    // Permissions
+    void setPermissions(const QSet<QString>& permissions);
+    bool hasPermission(const QString& toolName) const;
+    QSet<QString> permissions() const { return m_permissions; }
+
 signals:
     void serverStarted();
     void serverStopped();
@@ -90,6 +96,9 @@ private:
 
     int m_requestCount;
     QString m_lastError;
+
+    // Permissions
+    QSet<QString> m_permissions;  // Tool names this user/session is allowed to use
 
     // Process communication buffer
     QString m_outputBuffer;

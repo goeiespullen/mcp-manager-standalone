@@ -529,3 +529,320 @@ QStringList Keystore::listCredentials(const QString& service) {
 
     return credentials;
 }
+
+// ========== Per-User Credential Methods Implementation ==========
+
+bool Keystore::setUserCredential(const QString& userId, const QString& service, const QString& key, const QString& value) {
+    if (!m_initialized) {
+        qWarning() << "Keystore not initialized";
+        return false;
+    }
+
+    QJsonObject data = loadEncryptedData();
+
+    // Ensure "users" object exists
+    if (!data.contains("users")) {
+        data["users"] = QJsonObject();
+    }
+
+    QJsonObject users = data["users"].toObject();
+
+    // Ensure user object exists
+    if (!users.contains(userId)) {
+        users[userId] = QJsonObject();
+    }
+
+    QJsonObject user = users[userId].toObject();
+
+    // Ensure service object exists for user
+    if (!user.contains(service)) {
+        user[service] = QJsonObject();
+    }
+
+    QJsonObject serviceObj = user[service].toObject();
+    serviceObj[key] = value;
+    user[service] = serviceObj;
+    users[userId] = user;
+    data["users"] = users;
+
+    if (!saveEncryptedData(data)) {
+        return false;
+    }
+
+    emit userCredentialChanged(userId, service, key);
+    qDebug() << "Set user credential:" << userId << service << key;
+    return true;
+}
+
+QString Keystore::getUserCredential(const QString& userId, const QString& service, const QString& key, const QString& defaultValue) {
+    if (!m_initialized) {
+        qWarning() << "Keystore not initialized";
+        return defaultValue;
+    }
+
+    QJsonObject data = loadEncryptedData();
+
+    // Priority 1: User-specific credential (users[userId][service][key])
+    if (data.contains("users")) {
+        QJsonObject users = data["users"].toObject();
+        if (users.contains(userId)) {
+            QJsonObject user = users[userId].toObject();
+            if (user.contains(service)) {
+                QJsonObject serviceObj = user[service].toObject();
+                if (serviceObj.contains(key)) {
+                    return serviceObj[key].toString();
+                }
+            }
+        }
+    }
+
+    // Priority 2: Shared credential (shared[service][key])
+    if (data.contains("shared")) {
+        QJsonObject shared = data["shared"].toObject();
+        if (shared.contains(service)) {
+            QJsonObject serviceObj = shared[service].toObject();
+            if (serviceObj.contains(key)) {
+                qDebug() << "Using shared credential for" << userId << service << key;
+                return serviceObj[key].toString();
+            }
+        }
+    }
+
+    // Priority 3: Legacy flat credential (service[key]) - backward compatibility
+    if (data.contains(service)) {
+        QJsonObject serviceObj = data[service].toObject();
+        if (serviceObj.contains(key)) {
+            qDebug() << "Using legacy credential for" << userId << service << key;
+            return serviceObj[key].toString();
+        }
+    }
+
+    return defaultValue;
+}
+
+bool Keystore::deleteUserCredential(const QString& userId, const QString& service, const QString& key) {
+    if (!m_initialized) {
+        qWarning() << "Keystore not initialized";
+        return false;
+    }
+
+    QJsonObject data = loadEncryptedData();
+
+    if (!data.contains("users")) {
+        return false;
+    }
+
+    QJsonObject users = data["users"].toObject();
+    if (!users.contains(userId)) {
+        return false;
+    }
+
+    QJsonObject user = users[userId].toObject();
+    if (!user.contains(service)) {
+        return false;
+    }
+
+    QJsonObject serviceObj = user[service].toObject();
+    if (!serviceObj.contains(key)) {
+        return false;
+    }
+
+    serviceObj.remove(key);
+
+    // Clean up empty objects
+    if (serviceObj.isEmpty()) {
+        user.remove(service);
+    } else {
+        user[service] = serviceObj;
+    }
+
+    if (user.isEmpty()) {
+        users.remove(userId);
+    } else {
+        users[userId] = user;
+    }
+
+    if (users.isEmpty()) {
+        data.remove("users");
+    } else {
+        data["users"] = users;
+    }
+
+    if (!saveEncryptedData(data)) {
+        return false;
+    }
+
+    emit userCredentialChanged(userId, service, key);
+    qDebug() << "Deleted user credential:" << userId << service << key;
+    return true;
+}
+
+QMap<QString, QString> Keystore::getUserServiceCredentials(const QString& userId, const QString& service) {
+    QMap<QString, QString> credentials;
+
+    if (!m_initialized) {
+        return credentials;
+    }
+
+    QJsonObject data = loadEncryptedData();
+
+    // Get user-specific credentials
+    if (data.contains("users")) {
+        QJsonObject users = data["users"].toObject();
+        if (users.contains(userId)) {
+            QJsonObject user = users[userId].toObject();
+            if (user.contains(service)) {
+                QJsonObject serviceObj = user[service].toObject();
+                for (const QString& key : serviceObj.keys()) {
+                    credentials[key] = serviceObj[key].toString();
+                }
+            }
+        }
+    }
+
+    return credentials;
+}
+
+bool Keystore::clearUserService(const QString& userId, const QString& service) {
+    if (!m_initialized) {
+        qWarning() << "Keystore not initialized";
+        return false;
+    }
+
+    QJsonObject data = loadEncryptedData();
+
+    if (!data.contains("users")) {
+        return false;
+    }
+
+    QJsonObject users = data["users"].toObject();
+    if (!users.contains(userId)) {
+        return false;
+    }
+
+    QJsonObject user = users[userId].toObject();
+    if (!user.contains(service)) {
+        return false;
+    }
+
+    user.remove(service);
+
+    if (user.isEmpty()) {
+        users.remove(userId);
+    } else {
+        users[userId] = user;
+    }
+
+    if (users.isEmpty()) {
+        data.remove("users");
+    } else {
+        data["users"] = users;
+    }
+
+    if (!saveEncryptedData(data)) {
+        return false;
+    }
+
+    qDebug() << "Cleared user service:" << userId << service;
+    return true;
+}
+
+QStringList Keystore::listUsers() {
+    QStringList users;
+
+    if (!m_initialized) {
+        return users;
+    }
+
+    QJsonObject data = loadEncryptedData();
+
+    if (data.contains("users")) {
+        QJsonObject usersObj = data["users"].toObject();
+        users = usersObj.keys();
+    }
+
+    return users;
+}
+
+QStringList Keystore::listUserServices(const QString& userId) {
+    QStringList services;
+
+    if (!m_initialized) {
+        return services;
+    }
+
+    QJsonObject data = loadEncryptedData();
+
+    if (data.contains("users")) {
+        QJsonObject users = data["users"].toObject();
+        if (users.contains(userId)) {
+            QJsonObject user = users[userId].toObject();
+            services = user.keys();
+        }
+    }
+
+    return services;
+}
+
+int Keystore::migrateToUser(const QString& userId) {
+    if (!m_initialized) {
+        qWarning() << "Keystore not initialized";
+        return 0;
+    }
+
+    QJsonObject data = loadEncryptedData();
+    int migratedCount = 0;
+
+    // Migrate flat/legacy credentials to user-specific
+    QJsonObject shared;
+    QStringList keysToRemove;
+
+    for (const QString& key : data.keys()) {
+        // Skip special keys
+        if (key == "users" || key == "shared" || key == "version") {
+            continue;
+        }
+
+        // This is a service at root level - legacy format
+        QJsonObject serviceObj = data[key].toObject();
+        if (!serviceObj.isEmpty()) {
+            shared[key] = serviceObj;
+            keysToRemove.append(key);
+            migratedCount++;
+        }
+    }
+
+    if (migratedCount > 0) {
+        // Remove old flat keys
+        for (const QString& key : keysToRemove) {
+            data.remove(key);
+        }
+
+        // Move to shared or user-specific based on userId
+        if (!userId.isEmpty()) {
+            // Migrate to specific user
+            QJsonObject users = data.value("users").toObject();
+            QJsonObject user = users.value(userId).toObject();
+
+            // Merge shared into user (user-specific takes precedence)
+            for (const QString& service : shared.keys()) {
+                if (!user.contains(service)) {
+                    user[service] = shared[service];
+                }
+            }
+
+            users[userId] = user;
+            data["users"] = users;
+            qDebug() << "Migrated" << migratedCount << "services to user" << userId;
+        } else {
+            // Move to shared section
+            data["shared"] = shared;
+            qDebug() << "Migrated" << migratedCount << "services to shared";
+        }
+
+        data["version"] = "2.0";
+        saveEncryptedData(data);
+    }
+
+    return migratedCount;
+}
