@@ -433,10 +433,10 @@ void CredentialsTab::onTableRowSelected() {
 bool CredentialsTab::saveToKeystore(const QString& userId, const QString& service, const QMap<QString, QString>& credentials) {
     qDebug() << "Saving credentials: user=" << userId << "service=" << service;
 
-    // Save all credentials for this service
+    // Save all credentials for this user/service using per-user methods
     for (auto it = credentials.constBegin(); it != credentials.constEnd(); ++it) {
-        if (!m_keystore->setCredential(service, it.key(), it.value())) {
-            qWarning() << "Failed to save credential:" << service << it.key();
+        if (!m_keystore->setUserCredential(userId, service, it.key(), it.value())) {
+            qWarning() << "Failed to save credential:" << userId << service << it.key();
             return false;
         }
     }
@@ -446,23 +446,28 @@ bool CredentialsTab::saveToKeystore(const QString& userId, const QString& servic
 }
 
 bool CredentialsTab::deleteFromKeystore(const QString& userId, const QString& service) {
-    return m_keystore->clearService(service);
+    qDebug() << "Deleting credentials: user=" << userId << "service=" << service;
+    return m_keystore->clearUserService(userId, service);
 }
 
 QMap<QString, QString> CredentialsTab::loadFromKeystore(const QString& userId, const QString& service) {
-    return m_keystore->getServiceCredentials(service);
+    qDebug() << "Loading credentials: user=" << userId << "service=" << service;
+    return m_keystore->getUserServiceCredentials(userId, service);
 }
 
 QStringList CredentialsTab::listKeystoreUsers() {
-    // In C++ keystore, we don't have per-user separation (yet)
-    // Return a placeholder for compatibility
-    QStringList users;
-    if (!m_keystore->listServices().isEmpty()) {
-        users << "default";
+    // Get all users from per-user keystore
+    QStringList users = m_keystore->listUsers();
+
+    // Also check for legacy flat credentials and add "default" if any exist
+    QStringList legacyServices = m_keystore->listServices();
+    if (!legacyServices.isEmpty() && !users.contains("default")) {
+        users.prepend("default");  // Add at beginning for visibility
     }
+
     return users;
 }
 
 QStringList CredentialsTab::listUserServices(const QString& userId) {
-    return m_keystore->listServices();
+    return m_keystore->listUserServices(userId);
 }
