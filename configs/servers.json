@@ -1,11 +1,11 @@
 {
     "permissions": {
         "global_defaults": {
-            "EXECUTE_AI": true,
-            "EXECUTE_CODE": true,
-            "READ_REMOTE": true,
-            "WRITE_LOCAL": true,
-            "WRITE_REMOTE": true
+            "EXECUTE_AI": false,
+            "EXECUTE_CODE": false,
+            "READ_REMOTE": false,
+            "WRITE_LOCAL": false,
+            "WRITE_REMOTE": false
         }
     },
     "servers": [
@@ -88,9 +88,9 @@
             "command": "/home/laptop/MEGA/development/chatns/chatns_summerschool/.venv/bin/python",
             "description": "TeamCentraal MCP Server - NS Team registry OData API access",
             "env": {
+                "TEAMCENTRAAL_PASSWORD": "7TLQDQTH0'3\"9gMm53Y'.9AAjHcu58pc",
                 "TEAMCENTRAAL_URL": "https://teamcentraal.ns.nl/odata/POS_Odata_v4",
-                "TEAMCENTRAAL_USERNAME": "DIAScrumEvents",
-                "TEAMCENTRAAL_PASSWORD": "7TLQDQTH0'3\"9gMm53Y'.9AAjHcu58pc"
+                "TEAMCENTRAAL_USERNAME": "DIAScrumEvents"
             },
             "githubRepo": "https://github.com/ns-topaas/teamcentraal-mcp",
             "healthCheckInterval": 30000,

@@ -155,6 +155,34 @@ public:
      */
     int migrateToUser(const QString& userId);
 
+    // ========== Permission Management Methods ==========
+
+    /**
+     * @brief Set allowed tools (permissions) for a user's service
+     * @param userId User identifier
+     * @param service Service name (e.g., "azure", "confluence")
+     * @param permissions List of allowed tool names
+     * @return true if successful
+     */
+    bool setUserPermissions(const QString& userId, const QString& service, const QStringList& permissions);
+
+    /**
+     * @brief Get allowed tools (permissions) for a user's service
+     * @param userId User identifier
+     * @param service Service name
+     * @return List of allowed tool names (empty list = all tools allowed)
+     */
+    QStringList getUserPermissions(const QString& userId, const QString& service);
+
+    /**
+     * @brief Check if user has permission for a specific tool
+     * @param userId User identifier
+     * @param service Service name
+     * @param toolName Tool name to check
+     * @return true if user has permission (or if no restrictions set)
+     */
+    bool hasUserPermission(const QString& userId, const QString& service, const QString& toolName);
+
 signals:
     void credentialChanged(const QString& service, const QString& key);
     void userCredentialChanged(const QString& userId, const QString& service, const QString& key);

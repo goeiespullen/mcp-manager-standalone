@@ -13,6 +13,7 @@ MCPGateway::MCPGateway(MCPServerManager* serverManager, QObject* parent)
     : QObject(parent)
     , m_server(new QTcpServer(this))
     , m_serverManager(serverManager)
+    , m_keystore(new Keystore(this))
     , m_port(0)
     , m_sessionCounter(0)
 {
@@ -24,7 +25,7 @@ MCPGateway::MCPGateway(MCPServerManager* serverManager, QObject* parent)
     connect(m_serverManager, &MCPServerManager::globalPermissionsChanged,
             this, &MCPGateway::onGlobalPermissionsChanged);
 
-    qDebug() << "MCPGateway initialized";
+    qDebug() << "MCPGateway initialized with C++ Keystore";
 }
 
 MCPGateway::~MCPGateway() {
@@ -300,6 +301,26 @@ void MCPGateway::handleCreateSession(QTcpSocket* client, const QJsonValue& id, c
     connect(session, &MCPSession::serverError, this, &MCPGateway::onSessionServerError);
     connect(session, &MCPSession::clientDisconnected, this, &MCPGateway::onSessionClientDisconnected);
 
+    // Load and apply user permissions from C++ Keystore
+    if (!userId.isEmpty()) {
+        QStringList permissionsList = m_keystore->getUserPermissions(userId, serverType.toLower());
+        QSet<QString> permissions = QSet<QString>(permissionsList.begin(), permissionsList.end());
+        session->setPermissions(permissions);
+
+        if (permissions.isEmpty()) {
+            qDebug() << "No user-specific permissions for user:" << userId << "- will use global permissions";
+            LOG_INFO(Logger::Gateway,
+                    QString("User %1 has no user-specific permissions for %2 - will inherit global permissions")
+                    .arg(userId).arg(serverType));
+        } else {
+            qDebug() << "Loaded" << permissions.size() << "user-specific permissions for user:" << userId << "server:" << serverType;
+            LOG_INFO(Logger::Gateway,
+                    QString("User %1 has %2 user-specific allowed tools for %3 (overrides global): %4")
+                    .arg(userId).arg(permissions.size()).arg(serverType)
+                    .arg(permissionsList.join(", ")));
+        }
+    }
+
     // Start server
     if (!session->startServer()) {
         sendError(client, id, -32603, "Failed to start MCP server: " + session->lastError());
@@ -397,18 +418,30 @@ void MCPGateway::handleToolCall(QTcpSocket* client, const QJsonValue& id, const 
         return;
     }
 
-    // Check user-level permissions
-    if (!session->hasPermission(toolName)) {
-        sendError(client, id, -32004, QString("Tool '%1' blocked: user '%2' does not have permission").arg(toolName, session->userId()));
-        LOG_WARNING(Logger::Gateway, QString("Tool call blocked: user %1 lacks permission for tool %2").arg(session->userId(), toolName));
-        return;
-    }
+    // Permission hierarchy: user-specific permissions override global permissions
+    if (session->hasUserSpecificPermissions()) {
+        // User has explicit permissions set - check for block-all marker first
+        if (session->hasPermission("__BLOCK_ALL__")) {
+            sendError(client, id, -32005, QString("Tool '%1' blocked: user '%2' has all permissions blocked").arg(toolName, session->userId()));
+            LOG_WARNING(Logger::Gateway, QString("Tool call blocked: user %1 has block-all restriction (all tools denied)").arg(session->userId()));
+            return;
+        }
 
-    // Check tool permissions
-    if (server && !server->checkToolPermissions(toolName)) {
-        sendError(client, id, -32003, QString("Tool '%1' blocked: insufficient permissions for server '%2'").arg(toolName, serverType));
-        LOG_WARNING(Logger::Gateway, QString("Tool call blocked: insufficient permissions for tool %1 on server %2").arg(toolName, serverType));
-        return;
+        // Check against user allowlist
+        if (!session->hasPermission(toolName)) {
+            sendError(client, id, -32004, QString("Tool '%1' blocked: user '%2' does not have permission").arg(toolName, session->userId()));
+            LOG_WARNING(Logger::Gateway, QString("Tool call blocked: user %1 lacks permission for tool %2 (user-specific restrictions)").arg(session->userId(), toolName));
+            return;
+        }
+        LOG_DEBUG(Logger::Gateway, QString("Tool %1 allowed for user %2 via user-specific permissions").arg(toolName, session->userId()));
+    } else {
+        // No user-specific permissions - check global tool permissions
+        if (server && !server->checkToolPermissions(toolName)) {
+            sendError(client, id, -32003, QString("Tool '%1' blocked: insufficient permissions for server '%2'").arg(toolName, serverType));
+            LOG_WARNING(Logger::Gateway, QString("Tool call blocked: insufficient permissions for tool %1 on server %2 (global restrictions)").arg(toolName, serverType));
+            return;
+        }
+        LOG_DEBUG(Logger::Gateway, QString("Tool %1 allowed for user %2 via global permissions").arg(toolName, session->userId()));
     }
 
     // Log tool arguments for debugging
@@ -679,68 +712,50 @@ void MCPGateway::onGlobalPermissionsChanged() {
 
 QString MCPGateway::getTokenForUser(const QString& userId, const QString& system) {
     /**
-     * Get credential token for user by calling Python helper script.
+     * Get credential token for user from C++ Keystore.
      *
-     * This method calls scripts/get_token.py which:
-     * - Loads the user's encrypted keystore
-     * - Retrieves the token for the specified system
-     * - Returns token via stdout
+     * This method uses the C++ Keystore to retrieve user-specific credentials
+     * with fallback to shared credentials.
      *
      * @param userId User email address (e.g., "user@ns.nl")
-     * @param system System name (e.g., "azure", "confluence")
-     * @return Token string, or empty string if not found or error
+     * @param system System name (e.g., "azure", "confluence", "teamcentraal")
+     * @return Token string, or empty string if not found
      */
-
-    // Build path to get_token.py script
-    QString scriptPath = QDir::currentPath() + "/scripts/get_token.py";
-
-    // Validate script exists
-    if (!QFile::exists(scriptPath)) {
-        qWarning() << "Token lookup script not found:" << scriptPath;
-        LOG_ERROR(Logger::Gateway, QString("Token script not found: %1").arg(scriptPath));
-        return QString();
-    }
-
-    // Prepare process to call Python script
-    QProcess process;
-    QStringList args;
-    args << scriptPath << userId << system;
 
     qDebug() << "Looking up token for user:" << userId << "system:" << system;
 
-    // Execute script with timeout
-    process.start("python3", args);
-    if (!process.waitForFinished(5000)) {  // 5 second timeout
-        qWarning() << "Token lookup timeout for user:" << userId;
-        LOG_ERROR(Logger::Gateway,
-                 QString("Token lookup timeout for user %1, system %2")
-                 .arg(userId).arg(system));
-        process.kill();
-        return QString();
+    // Map system names to credential keys
+    QString credentialKey;
+    if (system.toLower() == "azure" || system == "Azure DevOps") {
+        credentialKey = "pat";  // Personal Access Token
+    } else if (system.toLower() == "confluence" || system == "Atlassian") {
+        credentialKey = "token";  // API Token
+    } else if (system.toLower() == "teamcentraal") {
+        credentialKey = "password";  // Password
+    } else if (system.toLower() == "chatns") {
+        credentialKey = "api_key";  // API Key
+    } else {
+        // Generic fallback - try "token" first, then "password"
+        credentialKey = "token";
     }
 
-    // Check exit code
-    if (process.exitCode() != 0) {
-        QString errorMsg = QString::fromUtf8(process.readAllStandardError()).trimmed();
-        qWarning() << "Token lookup failed:" << errorMsg;
-        LOG_ERROR(Logger::Gateway,
-                 QString("Token lookup failed for user %1, system %2: %3")
-                 .arg(userId).arg(system).arg(errorMsg));
-        return QString();
-    }
+    // Retrieve credential from C++ Keystore with user-specific lookup
+    QString token = m_keystore->getUserCredential(userId, system.toLower(), credentialKey);
 
-    // Read token from stdout
-    QString token = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+    // If generic fallback didn't work with "token", try "password"
+    if (token.isEmpty() && credentialKey == "token") {
+        token = m_keystore->getUserCredential(userId, system.toLower(), "password");
+    }
 
     if (token.isEmpty()) {
-        qWarning() << "Empty token returned for user:" << userId << "system:" << system;
+        qWarning() << "No credential found for user:" << userId << "system:" << system << "key:" << credentialKey;
         LOG_WARNING(Logger::Gateway,
-                   QString("Empty token for user %1, system %2")
-                   .arg(userId).arg(system));
+                   QString("No credential for user %1, system %2, key %3")
+                   .arg(userId).arg(system).arg(credentialKey));
         return QString();
     }
 
-    qDebug() << "Token retrieved successfully for user:" << userId << "system:" << system;
+    qDebug() << "Token retrieved successfully from C++ Keystore for user:" << userId << "system:" << system;
     LOG_INFO(Logger::Gateway,
             QString("Token retrieved for user %1, system %2")
             .arg(userId).arg(system));

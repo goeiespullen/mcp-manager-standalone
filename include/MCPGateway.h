@@ -7,6 +7,7 @@
 #include <QJsonObject>
 #include "MCPSession.h"
 #include "MCPServerManager.h"
+#include "Keystore.h"
 
 /**
  * @brief MCP Gateway - Master TCP server for session-based MCP access
@@ -80,6 +81,7 @@ private:
 
     QTcpServer* m_server;
     MCPServerManager* m_serverManager;
+    Keystore* m_keystore;  // Central credential and permission store
     quint16 m_port;
 
     // Client connections

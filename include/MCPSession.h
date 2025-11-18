@@ -61,6 +61,7 @@ public:
     // Permissions
     void setPermissions(const QSet<QString>& permissions);
     bool hasPermission(const QString& toolName) const;
+    bool hasUserSpecificPermissions() const { return !m_permissions.isEmpty(); }
     QSet<QString> permissions() const { return m_permissions; }
 
 signals:

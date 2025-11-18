@@ -3,6 +3,7 @@
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonArray>
 #include <QStandardPaths>
 #include <QDebug>
 #include <QRandomGenerator>
@@ -845,4 +846,86 @@ int Keystore::migrateToUser(const QString& userId) {
     }
 
     return migratedCount;
+}
+
+// ========== Permission Management Methods ==========
+
+bool Keystore::setUserPermissions(const QString& userId, const QString& service, const QStringList& permissions) {
+    QJsonObject data = loadEncryptedData();
+
+    // Ensure users structure exists
+    if (!data.contains("users")) {
+        data["users"] = QJsonObject();
+    }
+
+    QJsonObject users = data["users"].toObject();
+
+    // Ensure user exists
+    if (!users.contains(userId)) {
+        users[userId] = QJsonObject();
+    }
+
+    QJsonObject user = users[userId].toObject();
+
+    // Ensure service exists
+    if (!user.contains(service)) {
+        user[service] = QJsonObject();
+    }
+
+    QJsonObject serviceObj = user[service].toObject();
+
+    // Store permissions as JSON array under special "_permissions" key
+    QJsonArray permArray;
+    for (const QString& perm : permissions) {
+        permArray.append(perm);
+    }
+    serviceObj["_permissions"] = permArray;
+
+    // Update nested structure
+    user[service] = serviceObj;
+    users[userId] = user;
+    data["users"] = users;
+
+    qDebug() << "Set permissions for" << userId << service << ":" << permissions;
+    return saveEncryptedData(data);
+}
+
+QStringList Keystore::getUserPermissions(const QString& userId, const QString& service) {
+    QJsonObject data = loadEncryptedData();
+    QStringList permissions;
+
+    // Check user-specific permissions
+    if (data.contains("users")) {
+        QJsonObject users = data["users"].toObject();
+        if (users.contains(userId)) {
+            QJsonObject user = users[userId].toObject();
+            if (user.contains(service)) {
+                QJsonObject serviceObj = user[service].toObject();
+                if (serviceObj.contains("_permissions")) {
+                    QJsonArray permArray = serviceObj["_permissions"].toArray();
+                    for (const QJsonValue& val : permArray) {
+                        permissions.append(val.toString());
+                    }
+                    qDebug() << "Found permissions for" << userId << service << ":" << permissions;
+                    return permissions;
+                }
+            }
+        }
+    }
+
+    // No permissions found = all tools allowed (empty list)
+    qDebug() << "No permissions set for" << userId << service << "- allowing all";
+    return permissions;
+}
+
+bool Keystore::hasUserPermission(const QString& userId, const QString& service, const QString& toolName) {
+    QStringList permissions = getUserPermissions(userId, service);
+
+    // Empty list = no restrictions = allow all
+    if (permissions.isEmpty()) {
+        return true;
+    }
+
+    // Check if tool is in allowed list
+    return permissions.contains(toolName);
 }

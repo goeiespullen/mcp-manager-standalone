@@ -8,6 +8,7 @@
 #include "UpdateDialog.h"
 #include "Version.h"
 #include "Logger.h"
+#include "Keystore.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFormLayout>
@@ -50,6 +51,7 @@ MainWindow::MainWindow(MCPServerManager* manager, QWidget* parent)
     : QMainWindow(parent)
     , m_manager(manager)
     , m_gateway(nullptr)
+    , m_keystore(new Keystore(this))
 {
     setWindowTitle("MCP Server Manager");
     resize(1200, 800);
@@ -1299,6 +1301,148 @@ QWidget* MainWindow::createToolsAndPermissionsTab() {
     serverPermsLayout->addWidget(m_permissionsTable);
 
     layout->addWidget(serverPermsGroup);
+
+    // ========== SECTION 4: USER PER-SERVER PERMISSIONS ==========
+    QGroupBox* userPermsGroup = new QGroupBox("👤 User Per-Server Tool Permissions (overrides global defaults)");
+    QVBoxLayout* userPermsLayout = new QVBoxLayout(userPermsGroup);
+
+    QLabel* userDescLabel = new QLabel(
+        "<p>Configure tool permissions for individual users. "
+        "Users can either use global permissions or have custom permissions per server.</p>");
+    userDescLabel->setWordWrap(true);
+    userPermsLayout->addWidget(userDescLabel);
+
+    // User selection row
+    QHBoxLayout* userSelectionLayout = new QHBoxLayout();
+
+    QLabel* userLabel = new QLabel("<b>User Email:</b>");
+    userSelectionLayout->addWidget(userLabel);
+
+    m_userPermissionInput = new QLineEdit();
+    m_userPermissionInput->setPlaceholderText("user@ns.nl");
+    m_userPermissionInput->setMinimumWidth(250);
+    userSelectionLayout->addWidget(m_userPermissionInput);
+
+    QPushButton* loadUserPermsButton = new QPushButton("📖 Load User Settings");
+    loadUserPermsButton->setToolTip("Load permission settings for this user");
+    connect(loadUserPermsButton, &QPushButton::clicked, this, &MainWindow::onLoadUserPermissions);
+    userSelectionLayout->addWidget(loadUserPermsButton);
+
+    userSelectionLayout->addStretch();
+    userPermsLayout->addLayout(userSelectionLayout);
+
+    // Add spacing
+    userPermsLayout->addSpacing(15);
+
+    // Permission mode selection (radio buttons)
+    QGroupBox* modeGroup = new QGroupBox("Permission Mode");
+    QVBoxLayout* modeLayout = new QVBoxLayout(modeGroup);
+
+    m_userPermUseGlobalRadio = new QRadioButton("✅ Inherit Global Permissions (allow per-server overrides)");
+    m_userPermUseGlobalRadio->setToolTip("User receives global permissions and can fine-tune per server");
+    m_userPermUseGlobalRadio->setChecked(true);
+
+    m_userPermCustomRadio = new QRadioButton("🚫 Block All Permissions");
+    m_userPermCustomRadio->setToolTip("User has no permissions - all tools blocked");
+
+    modeLayout->addWidget(m_userPermUseGlobalRadio);
+    modeLayout->addWidget(m_userPermCustomRadio);
+
+    QLabel* modeHelpLabel = new QLabel(
+        "<small><i>Inherit = user gets global permissions + optional per-server fine-tuning<br>"
+        "Block = user has no access to any tools</i></small>");
+    modeHelpLabel->setWordWrap(true);
+    modeHelpLabel->setStyleSheet("color: #666; margin-top: 5px;");
+    modeLayout->addWidget(modeHelpLabel);
+
+    userPermsLayout->addWidget(modeGroup);
+
+    // Add spacing
+    userPermsLayout->addSpacing(10);
+
+    // Per-server permissions table (initially hidden)
+    m_userServerPermissionsTableGroup = new QGroupBox("Per-Server Tool Permissions");
+    QVBoxLayout* tableGroupLayout = new QVBoxLayout(m_userServerPermissionsTableGroup);
+
+    QLabel* tableLabel = new QLabel("<i>Empty = inherit global, non-empty = only listed tools allowed</i>");
+    tableLabel->setStyleSheet("color: #666;");
+    tableGroupLayout->addWidget(tableLabel);
+
+    m_userPermissionServerCombo = new QComboBox();  // Still need for internal use
+    m_userPermissionServerCombo->hide();  // Hide but keep for compatibility
+
+    m_userPermissionToolsList = new QListWidget();
+    m_userPermissionToolsList->hide();  // Hide but keep for compatibility
+
+    m_userPermissionToolInput = new QLineEdit();
+    m_userPermissionToolInput->hide();  // Hide but keep for compatibility
+
+    // Create table for user per-server permissions
+    m_userServerPermissionsTable = new QTableWidget();
+    m_userServerPermissionsTable->setColumnCount(3);
+    m_userServerPermissionsTable->setHorizontalHeaderLabels({"Server", "Allowed Tools (comma-separated)", "Actions"});
+    m_userServerPermissionsTable->horizontalHeader()->setStretchLastSection(false);
+    m_userServerPermissionsTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    m_userServerPermissionsTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    m_userServerPermissionsTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    m_userServerPermissionsTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_userServerPermissionsTable->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_userServerPermissionsTable->setAlternatingRowColors(true);
+    m_userServerPermissionsTable->setMinimumHeight(200);
+
+    // Populate table with all servers
+    m_userServerPermissionsTable->setRowCount(servers.size());
+    for (int i = 0; i < servers.size(); i++) {
+        MCPServerInstance* server = servers[i];
+
+        // Server name (read-only)
+        QTableWidgetItem* nameItem = new QTableWidgetItem(server->name());
+        nameItem->setFlags(nameItem->flags() & ~Qt::ItemIsEditable);
+        m_userServerPermissionsTable->setItem(i, 0, nameItem);
+
+        // Tools (editable)
+        QTableWidgetItem* toolsItem = new QTableWidgetItem("");
+        toolsItem->setToolTip("Enter tool names separated by commas. Leave empty to use global permissions.");
+        m_userServerPermissionsTable->setItem(i, 1, toolsItem);
+
+        // Clear button
+        QPushButton* clearBtn = new QPushButton("🔄 Clear");
+        clearBtn->setToolTip("Clear tools for this server (use global permissions)");
+        connect(clearBtn, &QPushButton::clicked, [this, i]() {
+            if (m_userServerPermissionsTable->item(i, 1)) {
+                m_userServerPermissionsTable->item(i, 1)->setText("");
+            }
+        });
+        m_userServerPermissionsTable->setCellWidget(i, 2, clearBtn);
+    }
+
+    tableGroupLayout->addWidget(m_userServerPermissionsTable);
+    userPermsLayout->addWidget(m_userServerPermissionsTableGroup);
+
+    // Initially hide the table group (user starts with global permissions)
+    m_userServerPermissionsTableGroup->setVisible(false);
+
+    // Connect radio buttons to show/hide table
+    connect(m_userPermUseGlobalRadio, &QRadioButton::toggled, [this](bool checked) {
+        m_userServerPermissionsTableGroup->setVisible(!checked);
+    });
+    connect(m_userPermCustomRadio, &QRadioButton::toggled, [this](bool checked) {
+        m_userServerPermissionsTableGroup->setVisible(checked);
+    });
+
+    // Save button
+    QHBoxLayout* saveLayout = new QHBoxLayout();
+    saveLayout->addStretch();
+
+    QPushButton* saveUserPermsButton = new QPushButton("💾 Save All User Permissions");
+    saveUserPermsButton->setStyleSheet("QPushButton { background-color: #4CAF50; color: white; font-weight: bold; padding: 8px 16px; }");
+    saveUserPermsButton->setMinimumHeight(35);
+    connect(saveUserPermsButton, &QPushButton::clicked, this, &MainWindow::onSaveUserPermissions);
+    saveLayout->addWidget(saveUserPermsButton);
+
+    userPermsLayout->addLayout(saveLayout);
+
+    layout->addWidget(userPermsGroup);
 
     // Action buttons
     QHBoxLayout* buttonLayout = new QHBoxLayout();
@@ -3410,4 +3554,169 @@ void MainWindow::onDiscardAllChanges() {
             "All permission changes have been discarded.\n\n"
             "Please switch to another tab and back to Permissions to see the refreshed state.");
     }
+}
+
+// Helper function to map server display name to keystore service name
+static QString serverNameToKeystoreName(const QString& serverName) {
+    // Map display names to keystore service names
+    QMap<QString, QString> mapping;
+    mapping["Atlassian"] = "atlassian";
+    mapping["Azure DevOps"] = "azure";
+    mapping["ChatNS"] = "chatns";
+    mapping["TeamCentraal"] = "teamcentraal";
+
+    return mapping.value(serverName, serverName.toLower());
+}
+
+// User-based permissions slots
+void MainWindow::onLoadUserPermissions() {
+    QString userId = m_userPermissionInput->text().trimmed();
+
+    if (userId.isEmpty()) {
+        QMessageBox::warning(this, "Missing User",
+            "Please enter a user email address.");
+        return;
+    }
+
+    // Check if user has block-all marker on any server
+    bool hasBlockAll = false;
+    int loadedCount = 0;
+
+    for (int row = 0; row < m_userServerPermissionsTable->rowCount(); row++) {
+        QString serverDisplayName = m_userServerPermissionsTable->item(row, 0)->text();
+        QString serviceName = serverNameToKeystoreName(serverDisplayName);
+        QStringList permissions = m_keystore->getUserPermissions(userId, serviceName);
+
+        // Check for block-all marker
+        if (permissions.size() == 1 && permissions[0] == "__BLOCK_ALL__") {
+            hasBlockAll = true;
+            // Clear the table entry for display
+            if (m_userServerPermissionsTable->item(row, 1)) {
+                m_userServerPermissionsTable->item(row, 1)->setText("");
+            }
+        } else {
+            // Set the tools in the table
+            if (m_userServerPermissionsTable->item(row, 1)) {
+                QString toolsText = permissions.join(", ");
+                m_userServerPermissionsTable->item(row, 1)->setText(toolsText);
+                if (!permissions.isEmpty()) {
+                    loadedCount++;
+                }
+            }
+        }
+    }
+
+    // Set radio button based on what we found
+    if (hasBlockAll) {
+        m_userPermCustomRadio->setChecked(true);
+        statusBar()->showMessage(QString("User %1 has all permissions blocked").arg(userId), 5000);
+    } else {
+        m_userPermUseGlobalRadio->setChecked(true);
+        if (loadedCount == 0) {
+            statusBar()->showMessage(QString("User %1 inherits global permissions for all servers")
+                .arg(userId), 5000);
+        } else {
+            statusBar()->showMessage(QString("User %1 inherits global with %2 server overrides")
+                .arg(userId).arg(loadedCount), 5000);
+        }
+    }
+}
+
+void MainWindow::onSaveUserPermissions() {
+    QString userId = m_userPermissionInput->text().trimmed();
+
+    if (userId.isEmpty()) {
+        QMessageBox::warning(this, "Missing User",
+            "Please enter a user email address.");
+        return;
+    }
+
+    // Check which mode is selected
+    bool blockAll = m_userPermCustomRadio->isChecked();
+
+    // Save permissions for all servers
+    int savedCount = 0;
+    int customCount = 0;
+    bool allSuccess = true;
+
+    for (int row = 0; row < m_userServerPermissionsTable->rowCount(); row++) {
+        QString serverDisplayName = m_userServerPermissionsTable->item(row, 0)->text();
+        QString serviceName = serverNameToKeystoreName(serverDisplayName);
+
+        QStringList permissions;
+
+        if (blockAll) {
+            // Block all mode: save special marker
+            permissions.append("__BLOCK_ALL__");
+        } else {
+            // Inherit global mode: save per-server tool list (or empty for inherit)
+            QString toolsText = m_userServerPermissionsTable->item(row, 1)->text().trimmed();
+
+            // Parse comma-separated tools
+            if (!toolsText.isEmpty()) {
+                QStringList parts = toolsText.split(',');
+                for (const QString& part : parts) {
+                    QString trimmed = part.trimmed();
+                    if (!trimmed.isEmpty()) {
+                        permissions.append(trimmed);
+                    }
+                }
+            }
+        }
+
+        // Save to keystore
+        if (m_keystore->setUserPermissions(userId, serviceName, permissions)) {
+            savedCount++;
+            if (!permissions.isEmpty() && permissions[0] != "__BLOCK_ALL__") {
+                customCount++;
+            }
+        } else {
+            allSuccess = false;
+        }
+    }
+
+    if (allSuccess) {
+        if (blockAll) {
+            QMessageBox::information(this, "Permissions Saved",
+                QString("Permissions blocked for user %1.\n\n"
+                        "User has NO access to any tools on any server.")
+                .arg(userId));
+            statusBar()->showMessage(QString("User %1 has all permissions blocked").arg(userId), 5000);
+        } else if (customCount == 0) {
+            QMessageBox::information(this, "Permissions Saved",
+                QString("Permissions saved for user %1.\n\n"
+                        "User inherits global permissions for all servers.")
+                .arg(userId));
+            statusBar()->showMessage(QString("User %1 inherits global permissions").arg(userId), 5000);
+        } else {
+            QMessageBox::information(this, "Permissions Saved",
+                QString("Successfully saved permissions for user %1.\n\n"
+                        "%2 servers with custom overrides\n"
+                        "%3 servers using global permissions")
+                .arg(userId)
+                .arg(customCount)
+                .arg(savedCount - customCount));
+            statusBar()->showMessage(QString("Saved permissions for %1: %2 custom, %3 global")
+                .arg(userId).arg(customCount).arg(savedCount - customCount), 5000);
+        }
+    } else {
+        QMessageBox::critical(this, "Save Failed",
+            "Failed to save some user permissions to keystore.");
+        statusBar()->showMessage("Failed to save all user permissions", 5000);
+    }
+}
+
+void MainWindow::onAddUserPermissionTool() {
+    // No longer used with table-based UI
+    // Tools are added directly in the table cells
+}
+
+void MainWindow::onRemoveUserPermissionTool() {
+    // No longer used with table-based UI
+    // Tools are edited directly in the table cells
+}
+
+void MainWindow::onClearUserPermissionTools() {
+    // No longer used with table-based UI
+    // Use the Clear button per server row instead
 }

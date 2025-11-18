@@ -9,6 +9,8 @@
 #include <QTableWidget>
 #include <QComboBox>
 #include <QListWidget>
+#include <QRadioButton>
+#include <QGroupBox>
 #include "UpdateChecker.h"
 
 class MCPServerManager;
@@ -16,6 +18,7 @@ class MCPGateway;
 class TrafficMonitor;
 class MCPServerInstance;
 class QNetworkAccessManager;
+class Keystore;
 
 /**
  * @brief Main window for MCP Server Manager
@@ -71,6 +74,13 @@ private slots:
     void onResetServerPermissions(const QString& serverName, int row);
     void onDiscardAllChanges();
 
+    // User-based permissions slots
+    void onLoadUserPermissions();
+    void onSaveUserPermissions();
+    void onAddUserPermissionTool();
+    void onRemoveUserPermissionTool();
+    void onClearUserPermissionTools();
+
 private:
     void setupUI();
     void createMenuBar();
@@ -104,6 +114,7 @@ private:
     MCPGateway* m_gateway;
     TrafficMonitor* m_trafficMonitor;
     UpdateChecker* m_updateChecker;
+    Keystore* m_keystore;
 
     QTabWidget* m_tabWidget;
     QLabel* m_statusLabel;
@@ -132,6 +143,18 @@ private:
     QTableWidget* m_toolsTable;
     QTextEdit* m_toolDetailsDisplay;
     QPushButton* m_refreshToolsButton;
+
+    // User-based permissions
+    QLineEdit* m_userPermissionInput;
+    QRadioButton* m_userPermUseGlobalRadio;
+    QRadioButton* m_userPermCustomRadio;
+    QGroupBox* m_userServerPermissionsTableGroup;
+    QTableWidget* m_userServerPermissionsTable;
+
+    // Hidden for compatibility
+    QComboBox* m_userPermissionServerCombo;
+    QListWidget* m_userPermissionToolsList;
+    QLineEdit* m_userPermissionToolInput;
 
     // API Tester
     QComboBox* m_apiTypeCombo;

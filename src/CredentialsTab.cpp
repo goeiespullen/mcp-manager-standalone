@@ -394,15 +394,27 @@ void CredentialsTab::onDeleteCredentials() {
 void CredentialsTab::onRefreshTable() {
     m_credentialsTable->setRowCount(0);
 
-    // Use Python script to list all credentials
-    // For now, we'll just show a placeholder - we need a list_all_credentials script
+    // Get all users from keystore
     QStringList users = listKeystoreUsers();
+
+    // Define the allowed service keys (from keystore)
+    QStringList allowedServices = {"azure", "teamcentraal", "confluence", "chatns"};
 
     int row = 0;
     for (const QString& userId : users) {
         QStringList services = listUserServices(userId);
 
         for (const QString& service : services) {
+            // Skip permission entries (start with underscore)
+            if (service.startsWith("_")) {
+                continue;
+            }
+
+            // Only show known services
+            if (!allowedServices.contains(service)) {
+                continue;
+            }
+
             m_credentialsTable->insertRow(row);
 
             QString displayName = m_serviceDisplayNames.value(service, service);
