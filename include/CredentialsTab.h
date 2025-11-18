@@ -39,6 +39,7 @@ private slots:
     void onDeleteCredentials();
     void onRefreshTable();
     void onTableRowSelected();
+    void onMigrateToUser();
 
 private:
     // UI setup
@@ -67,6 +68,7 @@ private:
     QPushButton* m_saveButton;
     QPushButton* m_deleteButton;
     QPushButton* m_refreshButton;
+    QPushButton* m_migrateButton;
     QTableWidget* m_credentialsTable;
     QLabel* m_statusLabel;
 

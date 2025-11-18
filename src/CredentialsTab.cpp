@@ -99,9 +99,15 @@ void CredentialsTab::setupUI() {
     m_refreshButton = new QPushButton("🔄 Refresh");
     connect(m_refreshButton, &QPushButton::clicked, this, &CredentialsTab::onRefreshTable);
 
+    m_migrateButton = new QPushButton("🔄 Migrate to User");
+    m_migrateButton->setStyleSheet("QPushButton { background-color: #FF9800; color: white; padding: 8px 16px; } QPushButton:hover { background-color: #F57C00; }");
+    m_migrateButton->setToolTip("Migrate legacy flat credentials to the current user");
+    connect(m_migrateButton, &QPushButton::clicked, this, &CredentialsTab::onMigrateToUser);
+
     buttonLayout->addWidget(m_saveButton);
     buttonLayout->addWidget(m_deleteButton);
     buttonLayout->addWidget(m_refreshButton);
+    buttonLayout->addWidget(m_migrateButton);
     buttonLayout->addStretch();
 
     formGroupLayout->addLayout(buttonLayout);
@@ -470,4 +476,52 @@ QStringList CredentialsTab::listKeystoreUsers() {
 
 QStringList CredentialsTab::listUserServices(const QString& userId) {
     return m_keystore->listUserServices(userId);
+}
+
+void CredentialsTab::onMigrateToUser() {
+    QString userId = m_userInput->text().trimmed();
+
+    if (userId.isEmpty()) {
+        m_statusLabel->setText("❌ Please enter a user email before migrating");
+        m_statusLabel->setStyleSheet("QLabel { background-color: #f8d7da; color: #721c24; padding: 8px; border-radius: 4px; }");
+        return;
+    }
+
+    // Confirm migration
+    QMessageBox::StandardButton reply = QMessageBox::question(
+        this,
+        "Migrate Credentials",
+        QString("This will migrate all legacy flat credentials to user '%1'.\n\n"
+                "Migrated credentials will be moved to the per-user structure and "
+                "will no longer appear under 'default' user.\n\n"
+                "Continue?").arg(userId),
+        QMessageBox::Yes | QMessageBox::No
+    );
+
+    if (reply != QMessageBox::Yes) {
+        return;
+    }
+
+    // Perform migration using Keystore method
+    int count = m_keystore->migrateToUser(userId);
+
+    if (count > 0) {
+        m_statusLabel->setText(QString("✅ Successfully migrated %1 credential(s) to user %2").arg(count).arg(userId));
+        m_statusLabel->setStyleSheet("QLabel { background-color: #d4edda; color: #155724; padding: 8px; border-radius: 4px; }");
+
+        // Refresh the table to show new user credentials
+        onRefreshTable();
+
+        // Show informational message
+        QMessageBox::information(
+            this,
+            "Migration Complete",
+            QString("Migrated %1 credential(s) to user %2.\n\n"
+                    "The credentials are now stored under the per-user structure.")
+                .arg(count).arg(userId)
+        );
+    } else {
+        m_statusLabel->setText("ℹ️ No legacy credentials found to migrate");
+        m_statusLabel->setStyleSheet("QLabel { background-color: #d1ecf1; color: #0c5460; padding: 8px; border-radius: 4px; }");
+    }
 }
