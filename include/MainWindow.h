@@ -81,6 +81,11 @@ private slots:
     void onRemoveUserPermissionTool();
     void onClearUserPermissionTools();
 
+    // Client permissions slots
+    void onClientPermissionChanged(const QString& userId, const QString& clientApp,
+                                   int category, int state);
+    void onResetClientPermissions(const QString& userId, const QString& clientApp);
+
 private:
     void setupUI();
     void createMenuBar();

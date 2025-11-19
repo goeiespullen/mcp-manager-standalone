@@ -845,111 +845,6 @@ QWidget* MainWindow::createPermissionsTab() {
 
     layout->addWidget(globalGroup);
 
-    // Per-Server Permissions Table
-    QLabel* serverLabel = new QLabel("<h3>Per-Server Permissions</h3>");
-    layout->addWidget(serverLabel);
-
-    m_permissionsTable = new QTableWidget();
-    m_permissionsTable->setColumnCount(7); // Server name + 5 permissions + Actions
-    m_permissionsTable->setHorizontalHeaderLabels(
-        {"Server", "READ_REMOTE", "WRITE_REMOTE", "WRITE_LOCAL", "EXECUTE_AI", "EXECUTE_CODE", "Actions"});
-
-    // Configure column widths
-    // Server column stretches to fill remaining space
-    m_permissionsTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-
-    // All permission columns fixed width (same size, big enough for text)
-    for (int col = 1; col <= 5; col++) {
-        m_permissionsTable->horizontalHeader()->setSectionResizeMode(col, QHeaderView::Fixed);
-        m_permissionsTable->setColumnWidth(col, 140);  // Wide enough for "EXECUTE_CODE"
-    }
-
-    // Actions column fixed width
-    m_permissionsTable->horizontalHeader()->setSectionResizeMode(6, QHeaderView::Fixed);
-    m_permissionsTable->setColumnWidth(6, 120);
-
-    // Populate table with servers
-    QList<MCPServerInstance*> servers = m_manager->allServers();
-    m_permissionsTable->setRowCount(servers.size());
-
-    for (int row = 0; row < servers.size(); row++) {
-        MCPServerInstance* server = servers[row];
-
-        // Server name column
-        QTableWidgetItem* nameItem = new QTableWidgetItem(server->name());
-        nameItem->setFlags(nameItem->flags() & ~Qt::ItemIsEditable);
-        m_permissionsTable->setItem(row, 0, nameItem);
-
-        // Permission checkboxes
-        for (int col = 1; col <= 5; col++) {
-            int category = col - 1; // 0-4
-            auto permCategory = static_cast<MCPServerInstance::PermissionCategory>(category);
-
-            QCheckBox* cb = new QCheckBox();
-            bool hasPermission = server->hasPermission(permCategory);
-            bool isExplicit = server->hasExplicitPermission(permCategory);
-
-            cb->setChecked(hasPermission);
-
-            QWidget* container = new QWidget();
-            QHBoxLayout* cellLayout = new QHBoxLayout(container);
-            cellLayout->addWidget(cb);
-            cellLayout->setAlignment(Qt::AlignCenter);
-            cellLayout->setContentsMargins(0, 0, 0, 0);
-
-            // Visual styling for inherited vs explicit
-            if (!isExplicit) {
-                // Inherited from global defaults - light blue/grey background
-                container->setStyleSheet("QWidget { background-color: #E8F4F8; }");
-                cb->setToolTip("🔄 Inheriting from global default. Click to create explicit override.");
-            } else {
-                // Explicit override - light yellow background to highlight
-                container->setStyleSheet("QWidget { background-color: #FFF9E6; }");
-                cb->setToolTip("✏️ Explicit override for this server. Uses custom setting instead of global default.");
-            }
-
-            m_permissionsTable->setCellWidget(row, col, container);
-
-            QString serverName = server->name();
-            connect(cb, &QCheckBox::toggled, this, [this, serverName, category](bool checked) {
-                onServerPermissionChanged(serverName, category, checked);
-            });
-        }
-
-        // Add Reset to Global button in Actions column
-        QPushButton* resetBtn = new QPushButton("🔄 Reset");
-        resetBtn->setToolTip("Remove all explicit overrides for this server and use global defaults");
-        resetBtn->setMaximumWidth(100);
-
-        QWidget* btnContainer = new QWidget();
-        QHBoxLayout* btnLayout = new QHBoxLayout(btnContainer);
-        btnLayout->addWidget(resetBtn);
-        btnLayout->setAlignment(Qt::AlignCenter);
-        btnLayout->setContentsMargins(2, 2, 2, 2);
-
-        m_permissionsTable->setCellWidget(row, 6, btnContainer);
-
-        QString serverName = server->name();
-        connect(resetBtn, &QPushButton::clicked, this, [this, serverName, row]() {
-            onResetServerPermissions(serverName, row);
-        });
-    }
-
-    layout->addWidget(m_permissionsTable);
-
-    // Change Log Section (OLD TAB - NOT USED)
-    QGroupBox* changeLogGroup = new QGroupBox("📝 Change Log - Unsaved Changes");
-    QVBoxLayout* changeLogLayout = new QVBoxLayout(changeLogGroup);
-
-    QTextEdit* changeLogDisplay = new QTextEdit();
-    changeLogDisplay->setReadOnly(true);
-    changeLogDisplay->setMaximumHeight(120);
-    changeLogDisplay->setPlaceholderText("No unsaved changes");
-    changeLogDisplay->setStyleSheet("QTextEdit { background-color: #F5F5F5; border: 1px solid #CCCCCC; }");
-    changeLogLayout->addWidget(changeLogDisplay);
-
-    layout->addWidget(changeLogGroup);
-
     // Action buttons
     QHBoxLayout* buttonLayout = new QHBoxLayout();
 
@@ -1097,35 +992,35 @@ QWidget* MainWindow::createToolsAndPermissionsTab() {
                 permsItem->setFlags(permsItem->flags() & ~Qt::ItemIsEditable);
                 m_toolsTable->setItem(row, 2, permsItem);
 
-                QTableWidgetItem* accessItem = new QTableWidgetItem(hasAllPermissions ? "✅ Allowed" : "❌ Blocked");
-                accessItem->setFlags(accessItem->flags() & ~Qt::ItemIsEditable);
-                accessItem->setForeground(hasAllPermissions ? QColor(0, 128, 0) : QColor(180, 0, 0));
-                m_toolsTable->setItem(row, 3, accessItem);
+                // Availability (based purely on permissions, not tool.enabled status)
+                QTableWidgetItem* availableItem = new QTableWidgetItem(hasAllPermissions ? "✅ Yes" : "❌ No");
+                availableItem->setFlags(availableItem->flags() & ~Qt::ItemIsEditable);
+                availableItem->setForeground(hasAllPermissions ? QColor(0, 128, 0) : QColor(180, 0, 0));
+                m_toolsTable->setItem(row, 3, availableItem);
 
-                QTableWidgetItem* enabledItem = new QTableWidgetItem(tool.enabled ? "✅ Enabled" : "❌ Disabled");
-                enabledItem->setFlags(enabledItem->flags() & ~Qt::ItemIsEditable);
-                enabledItem->setForeground(tool.enabled ? QColor(0, 128, 0) : QColor(180, 0, 0));
-                m_toolsTable->setItem(row, 4, enabledItem);
-
+                // Set background color based on availability
                 QColor bgColor = hasAllPermissions ? QColor(230, 255, 230) : QColor(255, 230, 230);
-                for (int col = 0; col < 5; col++) {
+                for (int col = 0; col < 4; col++) {
                     m_toolsTable->item(row, col)->setBackground(bgColor);
                 }
 
+                // Set tooltip with permission details
                 QString tooltip = QString("Tool: %1\n").arg(tool.name);
                 if (hasAllPermissions) {
                     tooltip += "✅ All required permissions granted\n";
                     if (!tool.permissions.isEmpty()) {
-                        tooltip += "Permissions: " + tool.permissions.join(", ");
+                        tooltip += "Required permissions: " + tool.permissions.join(", ");
+                    } else {
+                        tooltip += "No specific permissions required";
                     }
                 } else {
                     tooltip += "❌ Missing permissions:\n";
                     for (const QString& perm : missingPermissions) {
                         tooltip += "  - " + perm + "\n";
                     }
-                    tooltip += "\nAdjust permissions below to grant access.";
+                    tooltip += "\nAdjust global or per-server permissions to grant access.";
                 }
-                for (int col = 0; col < 5; col++) {
+                for (int col = 0; col < 4; col++) {
                     m_toolsTable->item(row, col)->setToolTip(tooltip);
                 }
             }
@@ -1158,19 +1053,24 @@ QWidget* MainWindow::createToolsAndPermissionsTab() {
     toolsToolbarLayout->addWidget(m_refreshToolsButton);
     toolsLayout->addLayout(toolsToolbarLayout);
 
-    // Tools table
+    // Tools table (showing tool availability based on permissions)
     m_toolsTable = new QTableWidget();
-    m_toolsTable->setColumnCount(5);
-    m_toolsTable->setHorizontalHeaderLabels({"Tool Name", "Description", "Required Permissions", "Access Status", "Enabled"});
+    m_toolsTable->setColumnCount(4);
+    m_toolsTable->setHorizontalHeaderLabels({"Tool Name", "Description", "Required Permissions", "Available"});
     m_toolsTable->horizontalHeader()->setStretchLastSection(false);
     m_toolsTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     m_toolsTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
     m_toolsTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
     m_toolsTable->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
-    m_toolsTable->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
     m_toolsTable->setSelectionBehavior(QAbstractItemView::SelectRows);
-    m_toolsTable->setMaximumHeight(200);
+    m_toolsTable->setMaximumHeight(250);
     toolsLayout->addWidget(m_toolsTable);
+
+    QLabel* availabilityNote = new QLabel(
+        "<small><i>ℹ️ Availability is calculated based on assigned permissions (global and per-server settings).</i></small>");
+    availabilityNote->setStyleSheet("color: #666; margin-top: 5px;");
+    availabilityNote->setWordWrap(true);
+    toolsLayout->addWidget(availabilityNote);
 
     // Tool details display (small)
     m_toolDetailsDisplay = new QTextEdit();
@@ -1220,42 +1120,92 @@ QWidget* MainWindow::createToolsAndPermissionsTab() {
 
     layout->addWidget(globalGroup);
 
-    // ========== SECTION 3: PER-SERVER PERMISSIONS ==========
-    QGroupBox* serverPermsGroup = new QGroupBox("🖥️ Per-Server Permission Overrides");
-    QVBoxLayout* serverPermsLayout = new QVBoxLayout(serverPermsGroup);
+    // ========== SECTION 3: CLIENT APPLICATION PERMISSIONS ==========
+    QGroupBox* clientPermsGroup = new QGroupBox("📱 Client Application Permissions (override global defaults)");
+    QVBoxLayout* clientPermsLayout = new QVBoxLayout(clientPermsGroup);
 
-    m_permissionsTable = new QTableWidget();
-    m_permissionsTable->setColumnCount(7);
-    m_permissionsTable->setHorizontalHeaderLabels(
-        {"Server", "READ_REMOTE", "WRITE_REMOTE", "WRITE_LOCAL", "EXECUTE_AI", "EXECUTE_CODE", "Actions"});
+    QLabel* clientDescLabel = new QLabel(
+        "<p>Configure permissions per client application. These settings override the global defaults for specific clients.</p>");
+    clientDescLabel->setWordWrap(true);
+    clientPermsLayout->addWidget(clientDescLabel);
 
-    m_permissionsTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    for (int col = 1; col <= 5; col++) {
-        m_permissionsTable->horizontalHeader()->setSectionResizeMode(col, QHeaderView::Fixed);
-        m_permissionsTable->setColumnWidth(col, 140);
+    // TEMPORARY: Client permissions feature disabled due to crash
+    // TODO: Debug and re-enable in future session
+    QLabel* emptyLabel = new QLabel(
+        "<p><i>⚠️ Client permissions feature temporarily disabled.</i></p>"
+        "<p><i>Clients will be registered automatically when they connect, "
+        "but permission management UI needs debugging.</i></p>");
+    emptyLabel->setWordWrap(true);
+    emptyLabel->setStyleSheet("color: #666; padding: 20px;");
+    clientPermsLayout->addWidget(emptyLabel);
+    layout->addWidget(clientPermsGroup);
+
+    // Skip the entire table creation for now
+    // return widget;  // Don't return early - let the rest of the tab be created
+
+    /* TEMPORARY: All client permissions table code disabled due to crash
+     * TODO: Debug and re-enable in future session
+     *
+     * The table creation and population code below causes a segmentation fault
+     * when registeredClients is not empty. Root cause unknown.
+     *
+    qDebug() << "CREATING CLIENT PERMISSIONS TABLE";
+    // Client permissions table (8 columns: User ID, Client App, 5 permissions, Actions)
+    QTableWidget* clientPermsTable = new QTableWidget();
+    qDebug() << "TABLE WIDGET CREATED";
+    clientPermsTable->setColumnCount(8);
+    qDebug() << "COLUMN COUNT SET";
+    clientPermsTable->setHorizontalHeaderLabels(
+        {"User ID", "Client App", "READ_REMOTE", "WRITE_REMOTE", "WRITE_LOCAL", "EXECUTE_AI", "EXECUTE_CODE", "Actions"});
+    qDebug() << "HEADERS SET";
+
+    clientPermsTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    clientPermsTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    for (int col = 2; col <= 6; col++) {
+        clientPermsTable->horizontalHeader()->setSectionResizeMode(col, QHeaderView::Fixed);
+        clientPermsTable->setColumnWidth(col, 110);
     }
-    m_permissionsTable->horizontalHeader()->setSectionResizeMode(6, QHeaderView::Fixed);
-    m_permissionsTable->setColumnWidth(6, 120);
+    clientPermsTable->horizontalHeader()->setSectionResizeMode(7, QHeaderView::Fixed);
+    clientPermsTable->setColumnWidth(7, 100);
+    qDebug() << "COLUMN RESIZE MODES SET";
 
-    // Populate table with servers
-    m_permissionsTable->setRowCount(servers.size());
+    // Populate table with registered clients
+    qDebug() << "SETTING ROW COUNT TO" << registeredClients.size();
+    clientPermsTable->setRowCount(registeredClients.size());
+    qDebug() << "ROW COUNT SET - STARTING POPULATION LOOP";
 
-    for (int row = 0; row < servers.size(); row++) {
-        MCPServerInstance* server = servers[row];
+    for (int row = 0; row < registeredClients.size(); row++) {
+        QString userId = registeredClients[row].first;
+        QString clientApp = registeredClients[row].second;
 
-        QTableWidgetItem* nameItem = new QTableWidgetItem(server->name());
-        nameItem->setFlags(nameItem->flags() & ~Qt::ItemIsEditable);
-        m_permissionsTable->setItem(row, 0, nameItem);
+        // User ID column (column 0)
+        QTableWidgetItem* userItem = new QTableWidgetItem(userId);
+        userItem->setFlags(userItem->flags() & ~Qt::ItemIsEditable);
+        clientPermsTable->setItem(row, 0, userItem);
 
-        for (int col = 1; col <= 5; col++) {
-            int category = col - 1;
+        // Client App column (column 1)
+        QTableWidgetItem* appItem = new QTableWidgetItem(clientApp);
+        appItem->setFlags(appItem->flags() & ~Qt::ItemIsEditable);
+        clientPermsTable->setItem(row, 1, appItem);
+
+        // Permission checkboxes (columns 2-6)
+        for (int col = 2; col <= 6; col++) {
+            int category = col - 2;  // Map column to category: 0=READ_REMOTE, 1=WRITE_REMOTE, etc.
             auto permCategory = static_cast<MCPServerInstance::PermissionCategory>(category);
 
             QCheckBox* cb = new QCheckBox();
-            bool hasPermission = server->hasPermission(permCategory);
-            bool isExplicit = server->hasExplicitPermission(permCategory);
+            cb->setTristate(true);
+            cb->setToolTip("☑ = Allowed | ☐ = Blocked | ◐ = Use Global Default");
 
-            cb->setChecked(hasPermission);
+            // TEMPORARY: Just set to PartiallyChecked (use global) to avoid crash
+            // TODO: Load actual permission value from manager once we fix the crash
+            // bool hasExplicit = false;
+            // bool permValue = m_manager->getClientPermission(userId, clientApp, permCategory, &hasExplicit);
+            // if (hasExplicit) {
+            //     cb->setCheckState(permValue ? Qt::Checked : Qt::Unchecked);
+            // } else {
+                cb->setCheckState(Qt::PartiallyChecked);
+            // }
 
             QWidget* container = new QWidget();
             QHBoxLayout* cellLayout = new QHBoxLayout(container);
@@ -1263,25 +1213,23 @@ QWidget* MainWindow::createToolsAndPermissionsTab() {
             cellLayout->setAlignment(Qt::AlignCenter);
             cellLayout->setContentsMargins(0, 0, 0, 0);
 
-            if (!isExplicit) {
-                container->setStyleSheet("QWidget { background-color: #E8F4F8; }");
-                cb->setToolTip("🔄 Inheriting from global default. Click to create explicit override.");
-            } else {
-                container->setStyleSheet("QWidget { background-color: #FFF9E6; }");
-                cb->setToolTip("✏️ Explicit override for this server. Uses custom setting instead of global default.");
-            }
+            container->setStyleSheet("QWidget { background-color: #E8F4F8; }");
+            clientPermsTable->setCellWidget(row, col, container);
 
-            m_permissionsTable->setCellWidget(row, col, container);
-
-            QString serverName = server->name();
-            connect(cb, &QCheckBox::toggled, this, [this, serverName, category](bool checked) {
-                onServerPermissionChanged(serverName, category, checked);
-            });
+            // TEMPORARY: Disable signal connections to test if crash is in lambda
+            // TODO: Re-enable once we fix the crash
+            // QString userIdCopy = userId;
+            // QString clientAppCopy = clientApp;
+            // int categoryCopy = category;
+            // connect(cb, &QCheckBox::stateChanged, this, [this, userIdCopy, clientAppCopy, categoryCopy](int state) {
+            //     onClientPermissionChanged(userIdCopy, clientAppCopy, categoryCopy, state);
+            // });
         }
 
+        // Reset button (column 7)
         QPushButton* resetBtn = new QPushButton("🔄 Reset");
-        resetBtn->setToolTip("Remove all explicit overrides for this server and use global defaults");
-        resetBtn->setMaximumWidth(100);
+        resetBtn->setToolTip("Reset to global defaults");
+        resetBtn->setMaximumWidth(80);
 
         QWidget* btnContainer = new QWidget();
         QHBoxLayout* btnLayout = new QHBoxLayout(btnContainer);
@@ -1289,160 +1237,27 @@ QWidget* MainWindow::createToolsAndPermissionsTab() {
         btnLayout->setAlignment(Qt::AlignCenter);
         btnLayout->setContentsMargins(2, 2, 2, 2);
 
-        m_permissionsTable->setCellWidget(row, 6, btnContainer);
+        clientPermsTable->setCellWidget(row, 7, btnContainer);
 
-        QString serverName = server->name();
-        connect(resetBtn, &QPushButton::clicked, this, [this, serverName, row]() {
-            onResetServerPermissions(serverName, row);
-        });
+        // TEMPORARY: Disable reset button connection to test if crash is in lambda
+        // TODO: Re-enable once we fix the crash
+        // connect(resetBtn, &QPushButton::clicked, [this, userId, clientApp]() {
+        //     onResetClientPermissions(userId, clientApp);
+        // });
     }
 
-    m_permissionsTable->setMaximumHeight(250);
-    serverPermsLayout->addWidget(m_permissionsTable);
+    clientPermsTable->setMaximumHeight(220);
+    clientPermsLayout->addWidget(clientPermsTable);
 
-    layout->addWidget(serverPermsGroup);
+    // Legend
+    QLabel* legendLabel = new QLabel(
+        "<small><i>Legend: ☑ = Toegestaan | ☐ = Geblokkeerd | ◐ = Gebruik global defaults</i></small>");
+    legendLabel->setStyleSheet("color: #666; margin-top: 5px;");
+    legendLabel->setWordWrap(true);
+    clientPermsLayout->addWidget(legendLabel);
 
-    // ========== SECTION 4: USER PER-SERVER PERMISSIONS ==========
-    QGroupBox* userPermsGroup = new QGroupBox("👤 User Per-Server Tool Permissions (overrides global defaults)");
-    QVBoxLayout* userPermsLayout = new QVBoxLayout(userPermsGroup);
-
-    QLabel* userDescLabel = new QLabel(
-        "<p>Configure tool permissions for individual users. "
-        "Users can either use global permissions or have custom permissions per server.</p>");
-    userDescLabel->setWordWrap(true);
-    userPermsLayout->addWidget(userDescLabel);
-
-    // User selection row
-    QHBoxLayout* userSelectionLayout = new QHBoxLayout();
-
-    QLabel* userLabel = new QLabel("<b>User Email:</b>");
-    userSelectionLayout->addWidget(userLabel);
-
-    m_userPermissionInput = new QLineEdit();
-    m_userPermissionInput->setPlaceholderText("user@ns.nl");
-    m_userPermissionInput->setMinimumWidth(250);
-    userSelectionLayout->addWidget(m_userPermissionInput);
-
-    QPushButton* loadUserPermsButton = new QPushButton("📖 Load User Settings");
-    loadUserPermsButton->setToolTip("Load permission settings for this user");
-    connect(loadUserPermsButton, &QPushButton::clicked, this, &MainWindow::onLoadUserPermissions);
-    userSelectionLayout->addWidget(loadUserPermsButton);
-
-    userSelectionLayout->addStretch();
-    userPermsLayout->addLayout(userSelectionLayout);
-
-    // Add spacing
-    userPermsLayout->addSpacing(15);
-
-    // Permission mode selection (radio buttons)
-    QGroupBox* modeGroup = new QGroupBox("Permission Mode");
-    QVBoxLayout* modeLayout = new QVBoxLayout(modeGroup);
-
-    m_userPermUseGlobalRadio = new QRadioButton("✅ Inherit Global Permissions (allow per-server overrides)");
-    m_userPermUseGlobalRadio->setToolTip("User receives global permissions and can fine-tune per server");
-    m_userPermUseGlobalRadio->setChecked(true);
-
-    m_userPermCustomRadio = new QRadioButton("🚫 Block All Permissions");
-    m_userPermCustomRadio->setToolTip("User has no permissions - all tools blocked");
-
-    modeLayout->addWidget(m_userPermUseGlobalRadio);
-    modeLayout->addWidget(m_userPermCustomRadio);
-
-    QLabel* modeHelpLabel = new QLabel(
-        "<small><i>Inherit = user gets global permissions + optional per-server fine-tuning<br>"
-        "Block = user has no access to any tools</i></small>");
-    modeHelpLabel->setWordWrap(true);
-    modeHelpLabel->setStyleSheet("color: #666; margin-top: 5px;");
-    modeLayout->addWidget(modeHelpLabel);
-
-    userPermsLayout->addWidget(modeGroup);
-
-    // Add spacing
-    userPermsLayout->addSpacing(10);
-
-    // Per-server permissions table (initially hidden)
-    m_userServerPermissionsTableGroup = new QGroupBox("Per-Server Tool Permissions");
-    QVBoxLayout* tableGroupLayout = new QVBoxLayout(m_userServerPermissionsTableGroup);
-
-    QLabel* tableLabel = new QLabel("<i>Empty = inherit global, non-empty = only listed tools allowed</i>");
-    tableLabel->setStyleSheet("color: #666;");
-    tableGroupLayout->addWidget(tableLabel);
-
-    m_userPermissionServerCombo = new QComboBox();  // Still need for internal use
-    m_userPermissionServerCombo->hide();  // Hide but keep for compatibility
-
-    m_userPermissionToolsList = new QListWidget();
-    m_userPermissionToolsList->hide();  // Hide but keep for compatibility
-
-    m_userPermissionToolInput = new QLineEdit();
-    m_userPermissionToolInput->hide();  // Hide but keep for compatibility
-
-    // Create table for user per-server permissions
-    m_userServerPermissionsTable = new QTableWidget();
-    m_userServerPermissionsTable->setColumnCount(3);
-    m_userServerPermissionsTable->setHorizontalHeaderLabels({"Server", "Allowed Tools (comma-separated)", "Actions"});
-    m_userServerPermissionsTable->horizontalHeader()->setStretchLastSection(false);
-    m_userServerPermissionsTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
-    m_userServerPermissionsTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
-    m_userServerPermissionsTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
-    m_userServerPermissionsTable->setSelectionBehavior(QAbstractItemView::SelectRows);
-    m_userServerPermissionsTable->setSelectionMode(QAbstractItemView::SingleSelection);
-    m_userServerPermissionsTable->setAlternatingRowColors(true);
-    m_userServerPermissionsTable->setMinimumHeight(200);
-
-    // Populate table with all servers
-    m_userServerPermissionsTable->setRowCount(servers.size());
-    for (int i = 0; i < servers.size(); i++) {
-        MCPServerInstance* server = servers[i];
-
-        // Server name (read-only)
-        QTableWidgetItem* nameItem = new QTableWidgetItem(server->name());
-        nameItem->setFlags(nameItem->flags() & ~Qt::ItemIsEditable);
-        m_userServerPermissionsTable->setItem(i, 0, nameItem);
-
-        // Tools (editable)
-        QTableWidgetItem* toolsItem = new QTableWidgetItem("");
-        toolsItem->setToolTip("Enter tool names separated by commas. Leave empty to use global permissions.");
-        m_userServerPermissionsTable->setItem(i, 1, toolsItem);
-
-        // Clear button
-        QPushButton* clearBtn = new QPushButton("🔄 Clear");
-        clearBtn->setToolTip("Clear tools for this server (use global permissions)");
-        connect(clearBtn, &QPushButton::clicked, [this, i]() {
-            if (m_userServerPermissionsTable->item(i, 1)) {
-                m_userServerPermissionsTable->item(i, 1)->setText("");
-            }
-        });
-        m_userServerPermissionsTable->setCellWidget(i, 2, clearBtn);
-    }
-
-    tableGroupLayout->addWidget(m_userServerPermissionsTable);
-    userPermsLayout->addWidget(m_userServerPermissionsTableGroup);
-
-    // Initially hide the table group (user starts with global permissions)
-    m_userServerPermissionsTableGroup->setVisible(false);
-
-    // Connect radio buttons to show/hide table
-    connect(m_userPermUseGlobalRadio, &QRadioButton::toggled, [this](bool checked) {
-        m_userServerPermissionsTableGroup->setVisible(!checked);
-    });
-    connect(m_userPermCustomRadio, &QRadioButton::toggled, [this](bool checked) {
-        m_userServerPermissionsTableGroup->setVisible(checked);
-    });
-
-    // Save button
-    QHBoxLayout* saveLayout = new QHBoxLayout();
-    saveLayout->addStretch();
-
-    QPushButton* saveUserPermsButton = new QPushButton("💾 Save All User Permissions");
-    saveUserPermsButton->setStyleSheet("QPushButton { background-color: #4CAF50; color: white; font-weight: bold; padding: 8px 16px; }");
-    saveUserPermsButton->setMinimumHeight(35);
-    connect(saveUserPermsButton, &QPushButton::clicked, this, &MainWindow::onSaveUserPermissions);
-    saveLayout->addWidget(saveUserPermsButton);
-
-    userPermsLayout->addLayout(saveLayout);
-
-    layout->addWidget(userPermsGroup);
+    layout->addWidget(clientPermsGroup);
+    */ // END TEMPORARY DISABLE
 
     // Action buttons
     QHBoxLayout* buttonLayout = new QHBoxLayout();
@@ -3374,32 +3189,8 @@ void MainWindow::onGlobalPermissionChanged(int category, bool enabled) {
         .arg(enabled ? "✅ enabled" : "❌ disabled");
     addChangeLogEntry(changeEntry);
 
-    // Update all inherited checkboxes in the table
-    QList<MCPServerInstance*> servers = m_manager->allServers();
-    for (int row = 0; row < servers.size(); row++) {
-        MCPServerInstance* server = servers[row];
-
-        // Only update if this server doesn't have an explicit override for this permission
-        if (!server->hasExplicitPermission(permCategory)) {
-            int col = category + 1; // column offset (0 = Server name, 1-5 = permissions)
-
-            // Get the checkbox from the table cell
-            QWidget* container = m_permissionsTable->cellWidget(row, col);
-            if (container) {
-                QCheckBox* cb = container->findChild<QCheckBox*>();
-                if (cb) {
-                    // Block signals temporarily to avoid triggering onServerPermissionChanged
-                    cb->blockSignals(true);
-                    cb->setChecked(enabled);
-                    cb->blockSignals(false);
-
-                    // Update styling to show it's still inherited (light blue background)
-                    container->setStyleSheet("QWidget { background-color: #E8F4F8; }");
-                    cb->setToolTip("🔄 Inheriting from global default. Click to create explicit override.");
-                }
-            }
-        }
-    }
+    // NOTE: UI update removed - no longer showing per-server permissions table
+    // (Per-server permissions table was replaced with client app permissions)
 
     statusBar()->showMessage(QString("Global default updated. Inherited permissions refreshed. Click 'Save Permissions' to persist."), 5000);
 
@@ -3429,16 +3220,8 @@ void MainWindow::onServerPermissionChanged(const QString& serverName, int catego
                 .arg(enabled ? "✅ enabled" : "❌ disabled");
             addChangeLogEntry(changeEntry);
 
-            // Update cell styling to show it's now an explicit override (yellow background)
-            int col = category + 1;
-            QWidget* container = m_permissionsTable->cellWidget(serverRow, col);
-            if (container) {
-                container->setStyleSheet("QWidget { background-color: #FFF9E6; }");
-                QCheckBox* cb = container->findChild<QCheckBox*>();
-                if (cb) {
-                    cb->setToolTip("✏️ Explicit override for this server. Uses custom setting instead of global default.");
-                }
-            }
+            // NOTE: UI update removed - no longer showing per-server permissions table
+            // (Per-server permissions table was replaced with client app permissions)
 
             // Mark that config needs saving
             statusBar()->showMessage(QString("Permission updated for %1 (explicit override created). Click 'Save Permissions' to persist.").arg(serverName), 5000);
@@ -3483,25 +3266,8 @@ void MainWindow::onResetServerPermissions(const QString& serverName, int row) {
         auto permCategory = static_cast<MCPServerInstance::PermissionCategory>(category);
         server->clearPermission(permCategory);
 
-        // Update UI: reset checkbox to global default and change styling to inherited
-        int col = category + 1;
-        QWidget* container = m_permissionsTable->cellWidget(row, col);
-        if (container) {
-            QCheckBox* cb = container->findChild<QCheckBox*>();
-            if (cb) {
-                // Get global default value
-                bool globalValue = m_manager->getGlobalPermission(permCategory);
-
-                // Update checkbox
-                cb->blockSignals(true);
-                cb->setChecked(globalValue);
-                cb->blockSignals(false);
-
-                // Change styling to inherited (blue background)
-                container->setStyleSheet("QWidget { background-color: #E8F4F8; }");
-                cb->setToolTip("🔄 Inheriting from global default. Click to create explicit override.");
-            }
-        }
+        // NOTE: UI update removed - no longer showing per-server permissions table
+        // (Per-server permissions table was replaced with client app permissions)
     }
 
     statusBar()->showMessage(QString("%1 reset to global defaults. Click 'Save Permissions' to persist.").arg(serverName), 5000);
@@ -3719,4 +3485,69 @@ void MainWindow::onRemoveUserPermissionTool() {
 void MainWindow::onClearUserPermissionTools() {
     // No longer used with table-based UI
     // Use the Clear button per server row instead
+}
+
+// ========== CLIENT PERMISSION HANDLERS ==========
+
+void MainWindow::onClientPermissionChanged(const QString& userId, const QString& clientApp,
+                                          int category, int state) {
+    // Bounds check
+    if (category < 0 || category >= 5) {
+        qWarning() << "Invalid category:" << category;
+        return;
+    }
+
+    auto permCategory = static_cast<MCPServerInstance::PermissionCategory>(category);
+
+    QString permNames[] = {"READ_REMOTE", "WRITE_REMOTE", "WRITE_LOCAL",
+                          "EXECUTE_AI", "EXECUTE_CODE"};
+
+    qDebug() << "onClientPermissionChanged called: userId=" << userId
+             << "clientApp=" << clientApp
+             << "category=" << category
+             << "state=" << state;
+
+    if (state == Qt::PartiallyChecked) {
+        // Use global default - don't set explicit permission
+        qDebug() << "Client" << userId << clientApp << permNames[category]
+                 << "set to use global default (not implemented yet)";
+        if (statusBar()) {
+            statusBar()->showMessage(
+                QString("Client permission for %1 set to use global default").arg(permNames[category]), 5000);
+        }
+    } else {
+        // Set explicit permission (allowed or blocked)
+        bool allowed = (state == Qt::Checked);
+
+        qDebug() << "About to call setClientPermission...";
+        m_manager->setClientPermission(userId, clientApp, permCategory, allowed);
+        qDebug() << "setClientPermission completed";
+
+        qDebug() << "Client" << userId << "|" << clientApp << permNames[category]
+                 << "set to" << (allowed ? "allowed" : "blocked");
+
+        if (statusBar()) {
+            statusBar()->showMessage(
+                QString("Client permission updated: %1 %2")
+                .arg(permNames[category], allowed ? "allowed" : "blocked"), 5000);
+        }
+    }
+    qDebug() << "onClientPermissionChanged completed";
+}
+
+void MainWindow::onResetClientPermissions(const QString& userId, const QString& clientApp) {
+    // Reset all permissions to global defaults
+    // Note: This would require implementing removeClientPermission() in manager
+    // For now, just show a message
+    qDebug() << "Reset permissions for client:" << userId << "|" << clientApp;
+    statusBar()->showMessage(
+        QString("Reset permissions for client: %1 | %2 (not fully implemented yet)")
+        .arg(userId, clientApp), 5000);
+
+    // TODO: When removeClientPermission() is implemented:
+    // for (int cat = 0; cat < 5; cat++) {
+    //     auto permCategory = static_cast<MCPServerInstance::PermissionCategory>(cat);
+    //     m_manager->removeClientPermission(userId, clientApp, permCategory);
+    // }
+    // Then refresh the UI to show all checkboxes as PartiallyChecked
 }

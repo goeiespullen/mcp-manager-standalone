@@ -103,5 +103,15 @@
             "workingDir": "/home/laptop/MEGA/development/chatns/mcp-manager"
         }
     ],
+    "registered_clients": [
+        {
+            "userId": "test@ns.nl",
+            "clientApp": "Test Dashboard",
+            "firstSeen": "2025-11-19T15:00:00Z",
+            "lastSeen": "2025-11-19T15:30:00Z"
+        }
+    ],
+    "client_permissions": {
+    },
     "version": "1.0"
 }

@@ -2,6 +2,7 @@
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonArray>
+#include <QDateTime>
 #include <QDebug>
 
 MCPServerManager::MCPServerManager(QObject* parent)
@@ -419,4 +420,134 @@ void MCPServerManager::onServerPermissionsChanged() {
         qDebug() << "Server" << name << "permissions changed, emitting signal";
         emit serverPermissionsChanged(name);
     }
+}
+
+// ========== CLIENT REGISTRATION METHODS ==========
+
+void MCPServerManager::registerClient(const QString& userId, const QString& clientApp) {
+    if (userId.isEmpty() || clientApp.isEmpty()) {
+        qWarning() << "Cannot register client: empty userId or clientApp";
+        return;
+    }
+
+    // Check if already registered
+    QJsonArray clients = m_config["registered_clients"].toArray();
+    QString currentTime = QDateTime::currentDateTime().toString(Qt::ISODate);
+
+    bool found = false;
+    for (int i = 0; i < clients.size(); i++) {
+        QJsonObject client = clients[i].toObject();
+        if (client["userId"].toString() == userId &&
+            client["clientApp"].toString() == clientApp) {
+            // Update lastSeen
+            client["lastSeen"] = currentTime;
+            clients[i] = client;
+            found = true;
+            break;
+        }
+    }
+
+    if (!found) {
+        // Add new registration
+        QJsonObject newClient;
+        newClient["userId"] = userId;
+        newClient["clientApp"] = clientApp;
+        newClient["firstSeen"] = currentTime;
+        newClient["lastSeen"] = currentTime;
+        clients.append(newClient);
+
+        qDebug() << "Registered new client:" << userId << clientApp;
+    }
+
+    m_config["registered_clients"] = clients;
+    saveConfig(m_configPath);
+}
+
+QList<QPair<QString, QString>> MCPServerManager::getRegisteredClients() const {
+    QList<QPair<QString, QString>> result;
+    QJsonArray clients = m_config["registered_clients"].toArray();
+
+    for (const QJsonValue& val : clients) {
+        QJsonObject client = val.toObject();
+        QString userId = client["userId"].toString();
+        QString clientApp = client["clientApp"].toString();
+        result.append(qMakePair(userId, clientApp));
+    }
+
+    return result;
+}
+
+void MCPServerManager::setClientPermission(const QString& userId, const QString& clientApp,
+                                          MCPServerInstance::PermissionCategory category, bool allowed) {
+    if (userId.isEmpty() || clientApp.isEmpty()) {
+        qWarning() << "Cannot set client permission: empty userId or clientApp";
+        return;
+    }
+
+    qDebug() << "setClientPermission: userId=" << userId << "clientApp=" << clientApp
+             << "category=" << category << "allowed=" << allowed;
+
+    QString key = makeClientKey(userId, clientApp);
+    QJsonObject clientPerms = m_config["client_permissions"].toObject();
+    QJsonObject perms = clientPerms[key].toObject();
+
+    QString permName;
+    switch (category) {
+        case MCPServerInstance::READ_REMOTE: permName = "READ_REMOTE"; break;
+        case MCPServerInstance::WRITE_REMOTE: permName = "WRITE_REMOTE"; break;
+        case MCPServerInstance::WRITE_LOCAL: permName = "WRITE_LOCAL"; break;
+        case MCPServerInstance::EXECUTE_AI: permName = "EXECUTE_AI"; break;
+        case MCPServerInstance::EXECUTE_CODE: permName = "EXECUTE_CODE"; break;
+        default:
+            qWarning() << "Invalid permission category:" << category;
+            return;
+    }
+
+    qDebug() << "Setting permission" << permName << "to" << allowed << "for key" << key;
+
+    perms[permName] = allowed;
+    clientPerms[key] = perms;
+    m_config["client_permissions"] = clientPerms;
+
+    qDebug() << "About to save config...";
+    bool saved = saveConfig(m_configPath);
+    qDebug() << "Config save" << (saved ? "succeeded" : "FAILED");
+
+    qDebug() << "Set client permission:" << key << permName << "=" << allowed;
+}
+
+bool MCPServerManager::getClientPermission(const QString& userId, const QString& clientApp,
+                                          MCPServerInstance::PermissionCategory category, bool* hasExplicit) const {
+    QString key = makeClientKey(userId, clientApp);
+    QJsonObject clientPerms = m_config["client_permissions"].toObject();
+
+    if (!clientPerms.contains(key)) {
+        // No explicit permission set
+        if (hasExplicit) *hasExplicit = false;
+        return getGlobalPermission(category);  // Return global default
+    }
+
+    QJsonObject perms = clientPerms[key].toObject();
+    QString permName;
+    switch (category) {
+        case MCPServerInstance::READ_REMOTE: permName = "READ_REMOTE"; break;
+        case MCPServerInstance::WRITE_REMOTE: permName = "WRITE_REMOTE"; break;
+        case MCPServerInstance::WRITE_LOCAL: permName = "WRITE_LOCAL"; break;
+        case MCPServerInstance::EXECUTE_AI: permName = "EXECUTE_AI"; break;
+        case MCPServerInstance::EXECUTE_CODE: permName = "EXECUTE_CODE"; break;
+    }
+
+    if (!perms.contains(permName)) {
+        // Client exists but this specific permission not set
+        if (hasExplicit) *hasExplicit = false;
+        return getGlobalPermission(category);  // Return global default
+    }
+
+    // Explicit permission found
+    if (hasExplicit) *hasExplicit = true;
+    return perms[permName].toBool();
+}
+
+QString MCPServerManager::makeClientKey(const QString& userId, const QString& clientApp) const {
+    return QString("%1|%2").arg(userId, clientApp);
 }

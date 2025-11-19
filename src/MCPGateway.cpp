@@ -296,6 +296,14 @@ void MCPGateway::handleCreateSession(QTcpSocket* client, const QJsonValue& id, c
         this
     );
 
+    // AUTO-REGISTER CLIENT (for dynamic client permissions tracking)
+    if (!userId.isEmpty() && !clientApp.isEmpty()) {
+        m_serverManager->registerClient(userId, clientApp);
+        qDebug() << "Auto-registered client:" << userId << "|" << clientApp;
+        LOG_DEBUG(Logger::Gateway,
+                 QString("Registered client: %1 | %2").arg(userId, clientApp));
+    }
+
     // Connect session signals
     connect(session, &MCPSession::responseReceived, this, &MCPGateway::onSessionResponse);
     connect(session, &MCPSession::serverError, this, &MCPGateway::onSessionServerError);

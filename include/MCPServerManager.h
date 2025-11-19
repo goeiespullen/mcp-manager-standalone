@@ -54,6 +54,16 @@ public:
     void setGlobalPermission(MCPServerInstance::PermissionCategory category, bool enabled);
     QMap<MCPServerInstance::PermissionCategory, bool> globalPermissions() const { return m_globalPermissions; }
 
+    // Client registration
+    void registerClient(const QString& userId, const QString& clientApp);
+    QList<QPair<QString, QString>> getRegisteredClients() const;
+
+    // Client permissions
+    void setClientPermission(const QString& userId, const QString& clientApp,
+                            MCPServerInstance::PermissionCategory category, bool allowed);
+    bool getClientPermission(const QString& userId, const QString& clientApp,
+                            MCPServerInstance::PermissionCategory category, bool* hasExplicit = nullptr) const;
+
 signals:
     void serverAdded(const QString& name);
     void serverRemoved(const QString& name);
@@ -76,6 +86,7 @@ private slots:
 private:
     QString findServerNameByInstance(MCPServerInstance* instance) const;
     bool validateServerConfig(const QJsonObject& config, QString& errorMsg);
+    QString makeClientKey(const QString& userId, const QString& clientApp) const;
 
     QMap<QString, MCPServerInstance*> m_servers;
     QString m_configPath;
