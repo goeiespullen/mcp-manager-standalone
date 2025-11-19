@@ -1,13 +1,23 @@
 {
+    "client_permissions": {
+    },
     "permissions": {
         "global_defaults": {
             "EXECUTE_AI": false,
             "EXECUTE_CODE": false,
-            "READ_REMOTE": false,
+            "READ_REMOTE": true,
             "WRITE_LOCAL": false,
             "WRITE_REMOTE": false
         }
     },
+    "registered_clients": [
+        {
+            "clientApp": "Test Dashboard",
+            "firstSeen": "2025-11-19T15:00:00Z",
+            "lastSeen": "2025-11-19T15:30:00Z",
+            "userId": "test@ns.nl"
+        }
+    ],
     "servers": [
         {
             "arguments": [
@@ -103,15 +113,5 @@
             "workingDir": "/home/laptop/MEGA/development/chatns/mcp-manager"
         }
     ],
-    "registered_clients": [
-        {
-            "userId": "test@ns.nl",
-            "clientApp": "Test Dashboard",
-            "firstSeen": "2025-11-19T15:00:00Z",
-            "lastSeen": "2025-11-19T15:30:00Z"
-        }
-    ],
-    "client_permissions": {
-    },
     "version": "1.0"
 }

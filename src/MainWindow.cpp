@@ -1129,26 +1129,9 @@ QWidget* MainWindow::createToolsAndPermissionsTab() {
     clientDescLabel->setWordWrap(true);
     clientPermsLayout->addWidget(clientDescLabel);
 
-    // TEMPORARY: Client permissions feature disabled due to crash
-    // TODO: Debug and re-enable in future session
-    QLabel* emptyLabel = new QLabel(
-        "<p><i>⚠️ Client permissions feature temporarily disabled.</i></p>"
-        "<p><i>Clients will be registered automatically when they connect, "
-        "but permission management UI needs debugging.</i></p>");
-    emptyLabel->setWordWrap(true);
-    emptyLabel->setStyleSheet("color: #666; padding: 20px;");
-    clientPermsLayout->addWidget(emptyLabel);
-    layout->addWidget(clientPermsGroup);
+    // Load registered clients from manager
+    QList<QPair<QString, QString>> registeredClients = m_manager->getRegisteredClients();
 
-    // Skip the entire table creation for now
-    // return widget;  // Don't return early - let the rest of the tab be created
-
-    /* TEMPORARY: All client permissions table code disabled due to crash
-     * TODO: Debug and re-enable in future session
-     *
-     * The table creation and population code below causes a segmentation fault
-     * when registeredClients is not empty. Root cause unknown.
-     *
     qDebug() << "CREATING CLIENT PERMISSIONS TABLE";
     // Client permissions table (8 columns: User ID, Client App, 5 permissions, Actions)
     QTableWidget* clientPermsTable = new QTableWidget();
@@ -1257,7 +1240,6 @@ QWidget* MainWindow::createToolsAndPermissionsTab() {
     clientPermsLayout->addWidget(legendLabel);
 
     layout->addWidget(clientPermsGroup);
-    */ // END TEMPORARY DISABLE
 
     // Action buttons
     QHBoxLayout* buttonLayout = new QHBoxLayout();
@@ -2950,21 +2932,15 @@ void MainWindow::refreshToolsBrowserTable() {
         permsItem->setFlags(permsItem->flags() & ~Qt::ItemIsEditable);
         m_toolsTable->setItem(row, 2, permsItem);
 
-        // Column 3: Access Status
-        QTableWidgetItem* accessItem = new QTableWidgetItem(hasAllPermissions ? "✅ Allowed" : "❌ Blocked");
-        accessItem->setFlags(accessItem->flags() & ~Qt::ItemIsEditable);
-        accessItem->setForeground(hasAllPermissions ? QColor(0, 128, 0) : QColor(180, 0, 0));
-        m_toolsTable->setItem(row, 3, accessItem);
-
-        // Column 4: Enabled Status
-        QTableWidgetItem* enabledItem = new QTableWidgetItem(tool.enabled ? "✅ Enabled" : "❌ Disabled");
-        enabledItem->setFlags(enabledItem->flags() & ~Qt::ItemIsEditable);
-        enabledItem->setForeground(tool.enabled ? QColor(0, 128, 0) : QColor(180, 0, 0));
-        m_toolsTable->setItem(row, 4, enabledItem);
+        // Column 3: Available (based purely on permissions)
+        QTableWidgetItem* availableItem = new QTableWidgetItem(hasAllPermissions ? "✅ Yes" : "❌ No");
+        availableItem->setFlags(availableItem->flags() & ~Qt::ItemIsEditable);
+        availableItem->setForeground(hasAllPermissions ? QColor(0, 128, 0) : QColor(180, 0, 0));
+        m_toolsTable->setItem(row, 3, availableItem);
 
         // Apply row coloring based on access status
         QColor bgColor = hasAllPermissions ? QColor(230, 255, 230) : QColor(255, 230, 230); // Light green or light red
-        for (int col = 0; col < 5; col++) {
+        for (int col = 0; col < 4; col++) {
             m_toolsTable->item(row, col)->setBackground(bgColor);
         }
 
@@ -2982,7 +2958,7 @@ void MainWindow::refreshToolsBrowserTable() {
             }
             tooltip += "\nGo to Permissions tab to grant access.";
         }
-        for (int col = 0; col < 5; col++) {
+        for (int col = 0; col < 4; col++) {
             m_toolsTable->item(row, col)->setToolTip(tooltip);
         }
     }
