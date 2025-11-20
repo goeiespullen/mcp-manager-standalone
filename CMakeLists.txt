@@ -80,3 +80,17 @@ target_link_libraries(test_keystore
     OpenSSL::SSL
     OpenSSL::Crypto
 )
+
+# Import credentials utility
+add_executable(import_credentials
+    import_credentials.cpp
+    src/Keystore.cpp
+    src/Logger.cpp
+)
+target_include_directories(import_credentials PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(import_credentials
+    Qt6::Core
+    Qt6::Network
+    OpenSSL::SSL
+    OpenSSL::Crypto
+)

@@ -732,15 +732,29 @@ QString MCPGateway::getTokenForUser(const QString& userId, const QString& system
 
     qDebug() << "Looking up token for user:" << userId << "system:" << system;
 
+    // Normalize system name to match GUI keystore service names
+    QString serviceName;
+    if (system == "Azure DevOps" || system.toLower() == "azure") {
+        serviceName = "azure";
+    } else if (system == "Atlassian" || system.toLower() == "confluence") {
+        serviceName = "confluence";
+    } else if (system.toLower() == "teamcentraal") {
+        serviceName = "teamcentraal";
+    } else if (system.toLower() == "chatns") {
+        serviceName = "chatns";
+    } else {
+        serviceName = system.toLower();
+    }
+
     // Map system names to credential keys
     QString credentialKey;
-    if (system.toLower() == "azure" || system == "Azure DevOps") {
+    if (serviceName == "azure") {
         credentialKey = "pat";  // Personal Access Token
-    } else if (system.toLower() == "confluence" || system == "Atlassian") {
+    } else if (serviceName == "confluence") {
         credentialKey = "token";  // API Token
-    } else if (system.toLower() == "teamcentraal") {
+    } else if (serviceName == "teamcentraal") {
         credentialKey = "password";  // Password
-    } else if (system.toLower() == "chatns") {
+    } else if (serviceName == "chatns") {
         credentialKey = "api_key";  // API Key
     } else {
         // Generic fallback - try "token" first, then "password"
@@ -748,11 +762,11 @@ QString MCPGateway::getTokenForUser(const QString& userId, const QString& system
     }
 
     // Retrieve credential from C++ Keystore with user-specific lookup
-    QString token = m_keystore->getUserCredential(userId, system.toLower(), credentialKey);
+    QString token = m_keystore->getUserCredential(userId, serviceName, credentialKey);
 
     // If generic fallback didn't work with "token", try "password"
     if (token.isEmpty() && credentialKey == "token") {
-        token = m_keystore->getUserCredential(userId, system.toLower(), "password");
+        token = m_keystore->getUserCredential(userId, serviceName, "password");
     }
 
     if (token.isEmpty()) {
