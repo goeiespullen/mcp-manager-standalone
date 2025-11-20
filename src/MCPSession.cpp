@@ -255,6 +255,13 @@ void MCPSession::onProcessReadyRead() {
             if (!method.isEmpty()) {
                 // This is a notification
                 qDebug() << "Session" << m_sessionId << "received notification:" << method;
+
+                // Silently ignore notifications/initialized from server (protocol violation by some servers)
+                // This notification should only be sent FROM client TO server, not the reverse
+                if (method == "notifications/initialized") {
+                    qDebug() << "Session" << m_sessionId << "ignoring incorrect 'notifications/initialized' from server";
+                    continue;
+                }
             } else if (id.isDouble() || id.isString()) {
                 // This is a response to a request
                 qDebug() << "Session" << m_sessionId << "received response for id:" << id.toString()

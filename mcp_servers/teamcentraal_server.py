@@ -528,6 +528,10 @@ class TeamCentraalMCPServer:
             result = self.handle_tools_list(params)
         elif method == "tools/call":
             result = self.handle_tools_call(params)
+        elif method and method.startswith("notifications/"):
+            # Silently ignore notifications (JSON-RPC notifications should not receive responses)
+            logger.debug(f"Ignoring notification: {method}")
+            return None
         else:
             raise ValueError(f"Unknown method: {method}")
 
@@ -550,6 +554,11 @@ class TeamCentraalMCPServer:
 
                     # Handle request
                     result = self.handle_request(request)
+
+                    # Skip response for notifications (result is None)
+                    if result is None:
+                        logger.debug(f"No response sent (notification)")
+                        continue
 
                     # Send response
                     response = {
